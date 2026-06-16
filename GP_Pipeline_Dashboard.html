@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GP Pipeline Dashboard — SMB Motion</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface2:#1c2333;--border:#30363d;
+  --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
+  --blue:#388bfd;--green:#3fb950;--yellow:#d29922;--red:#f85149;--gray:#6e7681;
+  --orange:#db6d28;--purple:#a371f7;--teal:#39c5cf;
+  --card:#161b22;--radius:8px;
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;line-height:1.5}
+a{color:var(--blue);text-decoration:none}
+.app{display:flex;flex-direction:column;min-height:100vh}
+
+/* TOPBAR */
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:200}
+.topbar h1{font-size:15px;font-weight:600;letter-spacing:.3px;white-space:nowrap}
+.topbar .meta{color:var(--text2);font-size:11px;white-space:nowrap}
+.topbar .spacer{flex:1}
+
+/* TABS */
+.tabs{display:flex;gap:2px;background:var(--surface2);border-bottom:1px solid var(--border);padding:0 20px;position:sticky;top:49px;z-index:190}
+.tab{padding:9px 16px;font-size:12px;font-weight:500;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:color .15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+
+/* CHANGE SUMMARY BANNER */
+.change-banner{background:#1a1f2e;border:1px solid #2d3a5e;border-radius:var(--radius);margin:12px 20px 0;overflow:hidden}
+.change-banner-header{padding:8px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:10px}
+.change-banner-header h3{font-size:12px;font-weight:600;color:var(--blue)}
+.change-banner-toggle{color:var(--text2);font-size:11px}
+.change-banner-body{padding:0 14px 10px;display:none}
+.change-banner-body.open{display:block}
+.change-list{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.change-item{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:4px;font-size:11px}
+.change-item.up{background:rgba(63,185,80,.1);color:var(--green)}
+.change-item.down{background:rgba(248,81,73,.1);color:var(--red)}
+.change-item.new{background:rgba(56,139,253,.1);color:var(--blue)}
+.change-item .acct{font-weight:600}
+
+/* MAIN */
+.main{padding:12px 20px;display:flex;flex-direction:column;gap:14px;max-width:1600px;width:100%;margin:0 auto}
+.tab-panel{display:none}
+.tab-panel.active{display:flex;flex-direction:column;gap:14px}
+
+/* FILTERS */
+.filters{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.filters label{color:var(--text2);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+.filter-group{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+select,input[type=range]{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:4px 8px;font-size:12px;cursor:pointer}
+select:focus{outline:none;border-color:var(--blue)}
+.multi-check{display:flex;gap:6px;flex-wrap:wrap}
+.chip{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;transition:all .15s;white-space:nowrap;user-select:none}
+.chip.active{background:var(--blue);border-color:var(--blue);color:#fff}
+.chip.green.active{background:var(--green);border-color:var(--green)}
+.chip.yellow.active{background:var(--yellow);border-color:var(--yellow)}
+.chip.red.active{background:var(--red);border-color:var(--red)}
+.chip.gray.active{background:var(--gray);border-color:var(--gray)}
+.divider{width:1px;height:24px;background:var(--border)}
+.btn-reset{background:none;border:1px solid var(--border);color:var(--text2);border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer;transition:all .15s}
+.btn-reset:hover{border-color:var(--text2);color:var(--text)}
+.gp-slider-wrap{display:flex;align-items:center;gap:8px}
+.gp-slider-wrap span{color:var(--text);font-size:11px;min-width:60px}
+
+/* KPI CARDS */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+
+/* QUARTERLY GOAL CARD */
+.kpi-quarterly{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;grid-column:1/-1}
+.kpi-quarterly .label{color:var(--text2);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px}
+.kpi-quarterly-stats{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
+.kpi-q-stat .qlbl{color:var(--text2);font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.kpi-q-stat .qval{font-size:20px;font-weight:700;letter-spacing:-.4px}
+.kpi-q-stat .qsub{color:var(--text3);font-size:10px;margin-top:2px}
+.q-divider{width:1px;height:40px;background:var(--border);align-self:center}
+.q-progress-wrap{background:var(--surface2);border-radius:6px;height:10px;overflow:hidden;position:relative}
+.q-progress-fill{height:100%;border-radius:6px;transition:width .6s ease;position:relative}
+.q-progress-fill::after{content:'';position:absolute;top:0;right:0;bottom:0;width:3px;background:rgba(255,255,255,.3);border-radius:0 6px 6px 0}
+.q-progress-labels{display:flex;justify-content:space-between;margin-top:5px;font-size:10px;color:var(--text3)}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.kpi .label{color:var(--text2);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+.kpi .value{font-size:22px;font-weight:700;letter-spacing:-.5px}
+.kpi .sub{color:var(--text2);font-size:11px;margin-top:3px}
+.kpi.green .value{color:var(--green)}
+.kpi.red .value{color:var(--red)}
+.kpi.yellow .value{color:var(--yellow)}
+.kpi.blue .value{color:var(--blue)}
+
+/* STATUS BADGES */
+.status-mini{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.status-dot{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot.green{background:var(--green)}.dot.yellow{background:var(--yellow)}.dot.red{background:var(--red)}.dot.gray{background:var(--gray)}
+
+/* SECTION */
+.section{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.section-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.section-header h2{font-size:13px;font-weight:600}
+.section-body{padding:16px}
+.chart-wrap{position:relative;height:260px}
+.chart-toggles{display:flex;gap:6px;flex-wrap:wrap}
+
+/* TABLE */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:var(--surface2);color:var(--text2);font-weight:600;padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--text)}
+th .sort-icon{opacity:.4;font-size:10px;margin-left:3px}
+th.sorted .sort-icon{opacity:1;color:var(--blue)}
+td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr.data-row:hover td{background:var(--surface2);cursor:pointer}
+tr.expanded td{background:var(--surface2)}
+.expand-row td{background:var(--surface2);padding:0}
+.expand-inner{padding:14px 16px;display:none}
+.expand-inner.open{display:block}
+.expand-chart-wrap{height:160px;position:relative;max-width:600px}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.badge.on-track{background:rgba(63,185,80,.15);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+.badge.watch{background:rgba(210,153,34,.15);color:var(--yellow);border:1px solid rgba(210,153,34,.3)}
+.badge.at-risk{background:rgba(248,81,73,.15);color:var(--red);border:1px solid rgba(248,81,73,.3)}
+.badge.closed{background:rgba(110,118,129,.15);color:var(--gray);border:1px solid rgba(110,118,129,.3)}
+.stage-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:500;white-space:nowrap;margin-right:4px}
+.stage-badge.ramping{background:rgba(56,139,253,.15);color:var(--blue);border:1px solid rgba(56,139,253,.3)}
+.stage-badge.ramped{background:rgba(163,113,247,.15);color:var(--purple);border:1px solid rgba(163,113,247,.3)}
+
+/* SCORECARD */
+.scorecard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.scorecard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+.scorecard .rep-name{font-weight:700;font-size:14px;margin-bottom:10px}
+.scorecard .sc-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.scorecard .sc-stat .lbl{color:var(--text2);font-size:10px;text-transform:uppercase;letter-spacing:.4px}
+.scorecard .sc-stat .val{font-size:15px;font-weight:700}
+.scorecard .mini-chart-wrap{height:80px;position:relative;margin-bottom:8px}
+.scorecard .gap-to-goal{color:var(--red);font-size:11px;font-weight:600;margin-top:6px}
+.scorecard .attainment-bar{background:var(--surface2);border-radius:4px;height:6px;margin-top:4px;overflow:hidden}
+.scorecard .attainment-fill{height:100%;border-radius:4px;background:var(--green);transition:width .3s}
+
+/* FORECAST */
+.forecast-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:800px){.forecast-grid{grid-template-columns:1fr}}
+.forecast-section h3{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.gap-row{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:5px;margin-bottom:4px}
+.gap-row:hover{background:var(--surface2)}
+.gap-row .rep{font-weight:600;font-size:12px}
+.gap-row .gap-val{color:var(--red);font-weight:700;font-size:13px}
+.gap-row .bar-wrap{flex:1;margin:0 12px;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden}
+.gap-row .bar-fill{height:100%;border-radius:2px;background:var(--red)}
+.flag-item{padding:7px 10px;border-left:3px solid var(--yellow);background:rgba(210,153,34,.06);border-radius:0 5px 5px 0;margin-bottom:5px;font-size:11px}
+.flag-item .flag-acct{font-weight:600;color:var(--text)}
+.flag-item .flag-sub{color:var(--text2);margin-top:2px}
+.flag-item.red{border-color:var(--red);background:rgba(248,81,73,.06)}
+
+/* SEARCH */
+.search-input{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:5px 10px;font-size:12px;width:200px}
+.search-input::placeholder{color:var(--text3)}
+.search-input:focus{outline:none;border-color:var(--blue)}
+
+/* HEATMAP */
+.pacing-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.pacing-wrap{overflow-x:auto}
+.pacing-table{border-collapse:collapse;font-size:11px;min-width:100%}
+.pacing-table th{background:var(--surface2);color:var(--text2);padding:6px 10px;border:1px solid var(--border);white-space:nowrap;font-size:10px;text-transform:uppercase;letter-spacing:.3px}
+.pacing-table th.acct-col{min-width:200px;text-align:left}
+.pacing-table td{padding:5px 8px;border:1px solid var(--border);text-align:center;font-weight:600;font-size:11px;min-width:70px}
+.pacing-table td.acct-name{text-align:left;font-weight:500;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.pacing-table td.rep-name{text-align:left;color:var(--text2);font-size:10px;font-weight:400}
+.cell-green{background:rgba(63,185,80,.2);color:var(--green)}
+.cell-yellow{background:rgba(210,153,34,.2);color:var(--yellow)}
+.cell-red{background:rgba(248,81,73,.2);color:var(--red)}
+.cell-empty{color:var(--text3)}
+.trend-up{color:var(--green)}
+.trend-flat{color:var(--text2)}
+.trend-down{color:var(--red)}
+
+/* GAP ANALYSIS */
+.gap-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+.gap-rank-table{width:100%;border-collapse:collapse;font-size:12px}
+.gap-rank-table th{background:var(--surface2);color:var(--text2);font-size:10px;text-transform:uppercase;letter-spacing:.4px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer}
+.gap-rank-table td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.gap-rank-table tr.top5 td{background:rgba(248,81,73,.05)}
+.gap-rank-table tr.top5:first-child td{background:rgba(248,81,73,.12)}
+.priority-badge{background:var(--red);color:#fff;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700}
+.rep-rollup{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:14px}
+.rep-rollup-card{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 14px}
+.rep-rollup-card .rep-nm{font-weight:600;font-size:12px;margin-bottom:6px}
+.rep-rollup-card .rep-gap{color:var(--red);font-weight:700;font-size:16px}
+.rep-rollup-card .rep-sub{color:var(--text2);font-size:10px}
+
+/* GP SPLIT */
+.gp-split-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:800px){.gp-split-grid{grid-template-columns:1fr}}
+.stat-callout{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:14px 16px;text-align:center}
+.stat-callout .val{font-size:28px;font-weight:700;color:var(--purple)}
+.stat-callout .lbl{color:var(--text2);font-size:11px;margin-top:4px}
+.month-breakdown{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px 16px}
+.month-breakdown h4{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px}
+.mb-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:12px}
+.mb-bar{height:8px;border-radius:4px;background:var(--surface);overflow:hidden;flex:1;margin:0 10px;display:flex}
+.mb-bar-retained{height:100%;background:var(--purple)}
+.mb-bar-ramping{height:100%;background:var(--teal)}
+
+/* UTILS */
+.text-green{color:var(--green)}.text-red{color:var(--red)}.text-yellow{color:var(--yellow)}.text-gray{color:var(--text2)}
+.text-right{text-align:right}.hidden{display:none!important}
+.empty-msg{color:var(--text3);text-align:center;padding:30px;font-size:12px}
+.bar-mini{display:inline-block;height:6px;border-radius:3px;background:var(--blue);vertical-align:middle;min-width:2px;max-width:80px}
+
+@media(max-width:700px){
+  .main{padding:10px 12px}
+  .kpi-row{grid-template-columns:repeat(2,1fr)}
+  .gp-split-grid{grid-template-columns:1fr}
+  .change-banner{margin:8px 12px 0}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <h1>📊 SMB Motion — GP Pipeline Dashboard</h1>
+  <span class="meta" id="lastUpdated"></span>
+  <div class="spacer"></div>
+  <span class="meta">Q2 2026 · Current Calendar Quarter</span>
+</div>
+
+<!-- NAV TABS -->
+<div class="tabs">
+  <div class="tab active" data-panel="overview">📈 Overview</div>
+  <div class="tab" data-panel="pacing">📅 Account Pacing</div>
+  <div class="tab" data-panel="gap">🎯 Gap Analysis</div>
+  <div class="tab" data-panel="gpsplit">🔵 GP Split</div>
+</div>
+
+<!-- CHANGE SUMMARY BANNER -->
+<div class="change-banner" id="changeBanner">
+  <div class="change-banner-header" onclick="toggleBanner()">
+    <h3 id="bannerTitle">📋 Weekly Data Refresh — Jun 15, 2026</h3>
+    <span class="change-banner-toggle" id="bannerToggle">▼ Show changes</span>
+  </div>
+  <div class="change-banner-body" id="bannerBody">
+    <div class="change-list" id="changeList"></div>
+  </div>
+</div>
+
+<!-- FILTERS (global, shown on all tabs) -->
+<div class="main" style="padding-bottom:0">
+<div class="filters" id="filtersBar">
+  <label>Rep</label>
+  <div class="multi-check" id="repFilter"></div>
+  <div class="divider"></div>
+  <label>Status</label>
+  <div class="multi-check" id="statusFilter">
+    <span class="chip green active" data-status="on-track">🟢 On Track</span>
+    <span class="chip yellow active" data-status="watch">🟡 Watch</span>
+    <span class="chip red active" data-status="at-risk">🔴 At Risk</span>
+    <span class="chip gray active" data-status="closed">⚫ Closed Won</span>
+  </div>
+  <div class="divider"></div>
+  <label>Stage</label>
+  <div class="multi-check" id="stageFilter">
+    <span class="chip active" data-stage="ramping" style="border-color:var(--blue)">🆕 Ramping</span>
+    <span class="chip active" data-stage="ramped" style="border-color:var(--purple)">✅ Ramped</span>
+  </div>
+  <div class="divider"></div>
+  <label>Min Est. GP $</label>
+  <div class="gp-slider-wrap">
+    <input type="range" id="gpSlider" min="0" max="2000" value="0" step="50" style="width:100px">
+    <span id="gpSliderVal">$0</span>
+  </div>
+  <div class="divider"></div>
+  <button class="btn-reset" id="btnReset">Reset</button>
+</div>
+</div>
+
+<div class="main" style="padding-top:8px">
+
+<!-- ===== OVERVIEW TAB ===== -->
+<div class="tab-panel active" id="panel-overview">
+
+<!-- KPI ROW -->
+<!-- QUARTERLY GOAL CARD -->
+<div class="kpi-row" style="grid-template-columns:1fr">
+  <div class="kpi-quarterly">
+    <div class="label">📆 Q2 2026 — Quarterly GP Goal</div>
+    <div class="kpi-quarterly-stats">
+      <div class="kpi-q-stat">
+        <div class="qlbl">Quarterly Goal</div>
+        <div class="qval" style="color:var(--text2)">$105,000</div>
+        <div class="qsub">Hardcoded · update each quarter</div>
+      </div>
+      <div class="q-divider"></div>
+      <div class="kpi-q-stat">
+        <div class="qlbl">Quarterly Actual GP</div>
+        <div class="qval" id="qActual">—</div>
+        <div class="qsub">From Current Calendar Quarter Stats</div>
+      </div>
+      <div class="q-divider"></div>
+      <div class="kpi-q-stat">
+        <div class="qlbl">Quarterly Attainment</div>
+        <div class="qval" id="qAttainPct">—</div>
+        <div class="qsub" id="qRemaining">—</div>
+      </div>
+    </div>
+    <div class="q-progress-wrap">
+      <div class="q-progress-fill" id="qProgressBar" style="width:0%"></div>
+    </div>
+    <div class="q-progress-labels">
+      <span>$0</span>
+      <span id="qProgressMid"></span>
+      <span>$105,000 goal</span>
+    </div>
+  </div>
+</div>
+
+<div class="kpi-row" id="kpiRow">
+  <div class="kpi blue"><div class="label">Est. Monthly GP (Target)</div><div class="value" id="kpiEstGP">—</div><div class="sub">Sum of ceilings, active pipeline</div></div>
+  <div class="kpi"><div class="label">Actual GP Generated</div><div class="value" id="kpiActualGP">—</div><div class="sub">Cumulative to date</div></div>
+  <div class="kpi"><div class="label">Team Monthly Run Rate</div><div class="value" id="kpiRunRate">—</div><div class="sub">Avg GP/month across team</div></div>
+  <div class="kpi"><div class="label">Run Rate Attainment</div><div class="value" id="kpiAttain">—</div><div class="sub">Run rate vs. target ceiling</div></div>
+  <div class="kpi"><div class="label">Accounts by Status</div>
+    <div class="status-mini" id="kpiStatusCounts"></div>
+    <div class="sub" style="margin-top:6px" id="kpiTotalAccts"></div>
+  </div>
+</div>
+
+<!-- MOM TREND -->
+<div class="section">
+  <div class="section-header">
+    <h2>Month-over-Month GP Trend</h2>
+    <div class="chart-toggles" id="trendToggles"></div>
+  </div>
+  <div class="section-body">
+    <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+  </div>
+</div>
+
+<!-- PIPELINE TABLE -->
+<div class="section">
+  <div class="section-header">
+    <h2>Pipeline — Account View</h2>
+    <input class="search-input" id="tableSearch" placeholder="Search accounts…" type="text">
+  </div>
+  <div class="tbl-wrap">
+    <table id="pipelineTable">
+      <thead>
+        <tr>
+          <th data-col="a">Account <span class="sort-icon">↕</span></th>
+          <th data-col="o">Rep <span class="sort-icon">↕</span></th>
+          <th data-col="c">Close Date <span class="sort-icon">↕</span></th>
+          <th data-col="r">Ramp Start <span class="sort-icon">↕</span></th>
+          <th data-col="e" class="text-right">Est. Mo. GP <span class="sort-icon">↕</span></th>
+          <th data-col="t" class="text-right">Actual Total GP <span class="sort-icon">↕</span></th>
+          <th data-col="rr" class="text-right">Mo. Run Rate <span class="sort-icon">↕</span></th>
+          <th data-col="att" class="text-right">Attainment <span class="sort-icon">↕</span></th>
+          <th data-col="st">Status <span class="sort-icon">↕</span></th>
+        </tr>
+      </thead>
+      <tbody id="pipelineTbody"></tbody>
+    </table>
+  </div>
+  <div style="padding:8px 12px;color:var(--text2);font-size:11px" id="tableFooter"></div>
+</div>
+
+<!-- REP SCORECARDS -->
+<div class="section">
+  <div class="section-header"><h2>Rep Scorecards</h2></div>
+  <div class="section-body">
+    <div class="scorecard-grid" id="scorecardGrid"></div>
+  </div>
+</div>
+
+<!-- FORECAST GAP -->
+<div class="section">
+  <div class="section-header"><h2>Forecast Gap Analysis</h2></div>
+  <div class="section-body">
+    <div class="forecast-grid">
+      <div>
+        <div class="forecast-section">
+          <h3>Gap to Target by Rep (Run Rate vs. Est. Monthly GP)</h3>
+          <div id="gapByRep"></div>
+        </div>
+        <div class="forecast-section" style="margin-top:20px">
+          <h3>⚠️ MoM GP Decline (May → Jun 2026)</h3>
+          <div id="declineFlags"></div>
+        </div>
+      </div>
+      <div>
+        <div class="forecast-section">
+          <h3>🔴 At Risk · Close Date Approaching</h3>
+          <div id="atRiskClosing"></div>
+        </div>
+        <div class="forecast-section" style="margin-top:20px">
+          <h3>📈 Q2 2026 Actuals vs. Target</h3>
+          <div style="height:180px;position:relative"><canvas id="q2Chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /panel-overview -->
+
+<!-- ===== ACCOUNT PACING TAB ===== -->
+<div class="tab-panel" id="panel-pacing">
+<div class="section">
+  <div class="section-header">
+    <h2>Account Pacing — Monthly GP Heatmap</h2>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text2)">
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:rgba(63,185,80,.4);border-radius:2px;display:inline-block"></span>≥ Est. GP</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:rgba(210,153,34,.4);border-radius:2px;display:inline-block"></span>$300–Est</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:rgba(248,81,73,.4);border-radius:2px;display:inline-block"></span>&lt;$300</span>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="pacing-controls">
+      <div>
+        <label style="color:var(--text2);font-size:11px;margin-right:6px">Show months:</label>
+        <select id="pacingRange">
+          <option value="6">Last 6 months</option>
+          <option value="9">Last 9 months</option>
+          <option value="14" selected>All (14 months)</option>
+        </select>
+      </div>
+      <div>
+        <label style="color:var(--text2);font-size:11px;margin-right:6px">Sort by:</label>
+        <select id="pacingSort">
+          <option value="last" selected>Last month GP ↓</option>
+          <option value="total">Total GP ↓</option>
+          <option value="name">Account name</option>
+        </select>
+      </div>
+      <span style="color:var(--text2);font-size:11px" id="pacingCount"></span>
+    </div>
+    <div class="pacing-wrap">
+      <table class="pacing-table" id="pacingTable"></table>
+    </div>
+  </div>
+</div>
+</div><!-- /panel-pacing -->
+
+<!-- ===== GAP ANALYSIS TAB ===== -->
+<div class="tab-panel" id="panel-gap">
+<div class="section">
+  <div class="section-header">
+    <h2>GP Gap Priority — Account Level</h2>
+    <div class="gap-controls" style="margin-bottom:0">
+      <div>
+        <label style="color:var(--text2);font-size:11px;margin-right:6px">Month:</label>
+        <select id="gapMonthSel"></select>
+      </div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="tbl-wrap">
+      <table class="gap-rank-table" id="gapRankTable">
+        <thead>
+          <tr>
+            <th style="width:36px">#</th>
+            <th>Account</th>
+            <th>Rep</th>
+            <th>Stage</th>
+            <th class="text-right">Est. Mo. GP</th>
+            <th class="text-right">Actual GP (Month)</th>
+            <th class="text-right">Gap $</th>
+            <th class="text-right">Gap %</th>
+          </tr>
+        </thead>
+        <tbody id="gapRankBody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:16px">
+      <h3 style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Gap $ by Rep — Selected Month</h3>
+      <div class="rep-rollup" id="repRollup"></div>
+    </div>
+  </div>
+</div>
+</div><!-- /panel-gap -->
+
+<!-- ===== GP SPLIT TAB ===== -->
+<div class="tab-panel" id="panel-gpsplit">
+
+<div class="gp-split-grid" style="margin-bottom:0">
+  <div class="stat-callout" id="retentionCallout">
+    <div class="val" id="retentionPct">—</div>
+    <div class="lbl">Rolling avg % of GP from Fully Ramped accounts<br><span style="color:var(--text3);font-size:10px">(Retention Health Number)</span></div>
+  </div>
+  <div class="stat-callout" id="rampingCallout">
+    <div class="val" id="rampingPct" style="color:var(--teal)">—</div>
+    <div class="lbl">Rolling avg % of GP from Ramping accounts<br><span style="color:var(--text3);font-size:10px">(Net New Growth Signal)</span></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header">
+    <h2>New vs. Retained GP by Month</h2>
+    <div style="display:flex;align-items:center;gap:12px;font-size:11px;color:var(--text2)">
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:6px;background:var(--purple);border-radius:2px;display:inline-block"></span>Fully Ramped (Retained)</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:6px;background:var(--teal);border-radius:2px;display:inline-block"></span>Ramping (New)</span>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="chart-wrap" style="height:300px"><canvas id="gpSplitChart"></canvas></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header">
+    <h2>Monthly Breakdown</h2>
+    <div>
+      <label style="color:var(--text2);font-size:11px;margin-right:6px">Select month:</label>
+      <select id="splitMonthSel"></select>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="gp-split-grid">
+      <div>
+        <div class="month-breakdown">
+          <h4>Fully Ramped Accounts</h4>
+          <div id="rampedAcctList"></div>
+        </div>
+      </div>
+      <div>
+        <div class="month-breakdown">
+          <h4>Ramping Accounts</h4>
+          <div id="rampingAcctList"></div>
+        </div>
+      </div>
+    </div>
+    <div id="splitMonthStats" style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap"></div>
+  </div>
+</div>
+
+</div><!-- /panel-gpsplit -->
+
+</div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+const RAW = {"accounts":[{"a":"Net Conversion","o":"Kate Olivares","e":400.0,"r":"2025-11-20","c":"2025-12-01","ap":"Active","ar":null,"g":{"2025-12":233.87,"2026-01":1111.71,"2026-02":1111.04,"2026-03":2072.01,"2026-04":2695.36,"2026-05":3355.02,"2026-06":810.4},"t":11389.4,"st":"Closed Won"},{"a":"HTT Cardmax Company","o":"Matthew Frost","e":671.95,"r":"2026-07-19","c":"2026-03-27","ap":"Active","ar":null,"g":{"2026-02":1837.8,"2026-03":4587.72,"2026-04":3228.65,"2026-05":1169.5},"t":10823.68,"st":"Closed Won"},{"a":"Solutions Group International, Inc.","o":"Matthew Frost","e":155.65,"r":"2026-06-05","c":"2026-02-26","ap":"Active","ar":null,"g":{"2026-02":1830.48,"2026-03":2031.45,"2026-04":1154.59,"2026-05":1499.98,"2026-06":998.13},"t":7514.62,"st":"Closed Won"},{"a":"National Rural Health Association","o":"Matthew Frost","e":128.1,"r":"2026-03-30","c":"2025-12-22","ap":"Active","ar":null,"g":{"2025-12":3.41,"2026-01":124.89,"2026-02":62.27,"2026-03":74.92,"2026-04":63.47,"2026-05":2983.14,"2026-06":62.88},"t":3374.98,"st":"Closed Won"},{"a":"Toland Construction - MO","o":"Matthew Frost","e":287.0,"r":"2026-01-09","c":"2025-08-20","ap":"Active","ar":null,"g":{"2025-09":498.21,"2025-10":1051.85,"2025-11":2410.93,"2025-12":1245.56,"2026-01":1395.02,"2026-02":1396.9,"2026-03":1150.27,"2026-04":1303.87,"2026-05":626.05,"2026-06":648.63},"t":11727.28,"st":"Closed Won"},{"a":"Hendersonville Community Co-Op","o":"Matthew Frost","e":171.0,"r":"2026-01-19","c":"2026-01-07","ap":"Active","ar":null,"g":{"2026-01":621.81,"2026-02":601.41,"2026-03":778.24,"2026-04":433.69,"2026-05":169.95,"2026-06":1258.63},"t":3863.72,"st":"Closed Won"},{"a":"Kenneth Adam Designs","o":"Matthew Frost","e":435.0,"r":"2026-06-04","c":"2026-01-21","ap":"Active","ar":null,"g":{"2026-01":-1.56,"2026-02":82.06,"2026-03":33.49,"2026-04":343.27,"2026-05":394.3,"2026-06":967.11},"t":1818.67,"st":"Closed Won"},{"a":"Home Equity Guardian","o":"Kate Olivares","e":500.0,"r":"2026-08-14","c":"2026-04-29","ap":"Active","ar":null,"g":{"2026-03":299.54,"2026-04":544.54,"2026-05":107.97,"2026-06":1048.9},"t":2000.94,"st":"Closed Won"},{"a":"Expert Semiconductor Technology, inc","o":"Kate Olivares","e":292.51,"r":"2025-11-07","c":"2025-07-21","ap":"Active","ar":null,"g":{"2025-07":10.24,"2025-08":39.57,"2025-09":46.5,"2025-10":41.52,"2025-11":378.26,"2025-12":674.77,"2026-01":60.66,"2026-02":41.04,"2026-03":104.82,"2026-04":339.4,"2026-05":868.64,"2026-06":388.97},"t":2994.4,"st":"Closed Won"},{"a":"Liberty Land Management LLC","o":"Kate Olivares","e":0.0,"r":"2026-04-12","c":"2025-10-03","ap":"Active","ar":null,"g":{"2025-10":71.89,"2025-11":79.39,"2026-01":78.58,"2026-02":61.97,"2026-03":2802.66,"2026-04":1148.39,"2026-05":131.35,"2026-06":73.0},"t":4447.24,"st":"Closed Won"},{"a":"United Home Care LLC","o":"Kate Olivares","e":96.47,"r":"2025-11-28","c":"2025-07-03","ap":"Active","ar":null,"g":{"2025-07":2.7,"2025-08":52.19,"2025-09":71.75,"2025-10":121.47,"2025-11":145.03,"2025-12":146.5,"2026-01":254.58,"2026-02":368.59,"2026-03":377.35,"2026-04":481.6,"2026-05":555.6,"2026-06":259.71},"t":2837.06,"st":"Closed Won"},{"a":"CRUSHS","o":"Matthew Frost","e":643.0,"r":"2026-01-18","c":"2025-08-30","ap":"Active","ar":null,"g":{"2025-08":17.69,"2025-09":59.44,"2025-10":168.56,"2025-11":14.89,"2025-12":182.0,"2026-01":274.21,"2026-02":269.11,"2026-03":142.62,"2026-04":253.5,"2026-05":44.96,"2026-06":918.49},"t":2345.48,"st":"Closed Won"},{"a":"St George Spirits","o":"Matthew Frost","e":280.89,"r":"2026-07-05","c":"2026-04-06","ap":"Active","ar":null,"g":{"2026-03":62.8,"2026-04":963.82,"2026-05":91.77,"2026-06":64.79},"t":1183.18,"st":"Closed Won"},{"a":"Abecca Grace, LLC","o":"Matthew Frost","e":0.0,"r":"2026-08-14","c":"2026-04-29","ap":"Active","ar":null,"g":{"2026-03":24.7,"2026-04":618.58,"2026-05":360.28,"2026-06":119.02},"t":1122.58,"st":"Closed Won"},{"a":"CDT Construction","o":"Kate Olivares","e":338.01,"r":"2025-11-28","c":"2025-08-08","ap":"Active","ar":null,"g":{"2025-08":317.59,"2025-09":190.55,"2025-10":343.21,"2025-11":255.0,"2025-12":204.09,"2026-01":247.34,"2026-02":149.76,"2026-03":362.45,"2026-04":540.77,"2026-05":348.2,"2026-06":142.24},"t":3101.19,"st":"Closed Won"},{"a":"Naz Apparel","o":"Matthew Frost","e":452.7,"r":"2026-05-16","c":"2026-01-07","ap":"Active","ar":null,"g":{"2025-12":977.35,"2026-01":161.16,"2026-02":195.05,"2026-03":176.79,"2026-04":479.18,"2026-05":186.96,"2026-06":340.83},"t":2517.3,"st":"Closed Won"},{"a":"H&H Auto Parts LLC","o":"Kate Olivares","e":423.9,"r":"2026-03-30","c":"2025-12-22","ap":"Active","ar":null,"g":{"2025-12":54.25,"2026-01":53.73,"2026-02":337.66,"2026-03":50.19,"2026-04":47.33,"2026-05":48.37,"2026-06":883.26},"t":1474.78,"st":"Closed Won"},{"a":"Kloris LLC","o":"Arianna Modesti","e":385.0,"r":"2026-09-21","c":"2026-08-10","ap":"Active","ar":null,"g":{"2026-05":-2.98,"2026-06":875.39},"t":872.41,"st":"Onboarding"},{"a":"Cope Homes, LLC","o":"Matthew Frost","e":267.0,"r":"2026-06-06","c":"2026-03-17","ap":"Active","ar":null,"g":{"2026-02":7.84,"2026-03":63.26,"2026-04":66.58,"2026-05":542.77,"2026-06":244.21},"t":924.65,"st":"Closed Won"},{"a":"Friendly Foods Inc","o":"Matthew Frost","e":691.55,"r":"2026-05-15","c":"2025-12-30","ap":"Active","ar":"Active","g":{"2025-12":440.74,"2026-01":1195.85,"2026-02":654.48,"2026-03":676.24,"2026-04":407.15,"2026-05":155.39,"2026-06":202.36},"t":3732.21,"st":"Closed Won"},{"a":"lanier welding products","o":"Matthew Frost","e":489.8,"r":"2026-03-26","c":"2025-12-18","ap":"Inactive","ar":"Active","g":{"2025-12":52.12,"2026-01":66.65,"2026-02":225.2,"2026-03":153.36,"2026-04":221.13,"2026-05":289.74,"2026-06":241.02},"t":1249.23,"st":"Closed Won"},{"a":"Buescher Ranch","o":"Kate Olivares","e":202.08,"r":"2026-04-04","c":"2025-11-10","ap":"Active","ar":null,"g":{"2025-11":252.88,"2025-12":700.06,"2026-01":977.37,"2026-02":342.58,"2026-03":89.77,"2026-04":154.09,"2026-05":109.78,"2026-06":466.86},"t":3093.38,"st":"Closed Won"},{"a":"Appellate Defenders, Inc.","o":"Matthew Frost","e":107.0,"r":"2026-02-08","c":"2025-10-15","ap":"Active","ar":null,"g":{"2025-10":149.99,"2025-11":67.32,"2025-12":65.87,"2026-01":71.23,"2026-02":63.48,"2026-03":135.35,"2026-04":65.14,"2026-05":597.02,"2026-06":65.64},"t":1281.04,"st":"Closed Won"},{"a":"Rumford Stone, Inc","o":"Kate Olivares","e":168.5,"r":"2025-10-17","c":"2025-05-20","ap":"Active","ar":"Active","g":{"2025-05":6.2,"2025-06":5.99,"2025-07":-0.29,"2025-08":220.87,"2025-09":479.29,"2025-10":533.12,"2025-11":772.4,"2025-12":1137.97,"2026-01":470.22,"2026-02":312.6,"2026-03":606.25,"2026-04":241.51,"2026-05":353.57,"2026-06":112.7},"t":5252.4,"st":"Closed Won"},{"a":"Buyers Choice USA","o":"Matthew Frost","e":357.13,"r":"2026-07-18","c":"2026-03-27","ap":"Active","ar":null,"g":{"2026-02":477.2,"2026-03":51.85,"2026-04":115.44,"2026-05":535.04,"2026-06":50.7},"t":1230.24,"st":"Closed Won"},{"a":"Shree Satya Sai LLC","o":"Matthew Frost","e":35.0,"r":"2026-09-05","c":"2026-05-05","ap":"Active","ar":null,"g":{"2026-04":202.61,"2026-05":272.65,"2026-06":211.91},"t":687.17,"st":"Closed Won"},{"a":"Protagenic Therapeutics, Inc.","o":"Matthew Frost","e":147.7,"r":"2026-03-29","c":"2025-12-15","ap":"Active","ar":null,"g":{"2025-12":262.23,"2026-01":154.14,"2026-02":501.28,"2026-03":134.86,"2026-04":392.29,"2026-05":204.77,"2026-06":74.97},"t":1724.53,"st":"Closed Won"},{"a":"Cope Equities","o":"Matthew Frost","e":0.0,"r":"2026-08-15","c":"2026-03-06","ap":"Active","ar":null,"g":{"2026-03":57.88,"2026-04":290.29,"2026-05":219.9,"2026-06":125.8},"t":693.87,"st":"Closed Won"},{"a":"Herbert Law Group, LLC","o":"Matthew Frost","e":375.0,"r":"2026-06-14","c":"2026-02-04","ap":"Active","ar":null,"g":{"2026-01":25.8,"2026-02":952.25,"2026-03":785.99,"2026-04":545.58,"2026-05":76.52},"t":2386.14,"st":"Closed Won"},{"a":"INSAIT SOLUTIONS LLC","o":"Kate Olivares","e":130.0,"r":"2025-10-24","c":"2025-05-27","ap":"Inactive","ar":null,"g":{"2025-06":52.36,"2025-07":149.51,"2025-08":768.52,"2025-09":1222.08,"2025-10":869.23,"2025-11":541.0,"2026-01":1013.09,"2026-02":143.58,"2026-03":280.48,"2026-04":608.14},"t":5648.0,"st":"Closed Won"},{"a":"GK Truckline","o":"Kate Olivares","e":461.94,"r":"2026-10-10","c":"2026-09-21","ap":"Active","ar":null,"g":{"2026-05":56.31,"2026-06":489.76},"t":546.07,"st":"Onboarding"},{"a":"Johnston LLC","o":"Matthew Frost","e":175.62,"r":"2026-04-02","c":"2025-12-16","ap":"Active","ar":null,"g":{"2025-12":41.02,"2026-01":95.82,"2026-02":67.32,"2026-03":472.34,"2026-04":457.11,"2026-05":43.35,"2026-06":43.18},"t":1220.13,"st":"Closed Won"},{"a":"Rminvestmentsmiami LLC","o":"Matthew Frost","e":940.0,"r":"2026-01-31","c":"2025-09-08","ap":null,"ar":"Active","g":{"2025-09":338.03,"2025-10":480.26,"2025-11":1682.38,"2025-12":1772.83,"2026-01":1901.91,"2026-02":276.59,"2026-03":100.73,"2026-04":340.78,"2026-05":70.31,"2026-06":107.01},"t":7070.81,"st":"Closed Won"},{"a":"ClearBlu Environmental","o":"Kate Olivares","e":131.0,"r":"2026-01-24","c":"2025-12-18","ap":"Active","ar":"Active","g":{"2025-12":9.02,"2026-01":37.3,"2026-02":214.5,"2026-03":214.28,"2026-04":167.77,"2026-05":181.93,"2026-06":157.26},"t":982.06,"st":"Closed Won"},{"a":"MJDII Architects, Inc.","o":"Matthew Frost","e":72.7,"r":"2026-05-15","c":"2025-12-16","ap":"Active","ar":null,"g":{"2025-12":-2.21,"2026-01":15.67,"2026-02":15.98,"2026-03":22.2,"2026-04":468.91,"2026-05":16.29,"2026-06":16.44},"t":553.28,"st":"Closed Won"},{"a":"Community Wellness Concierge","o":"Matthew Frost","e":390.0,"r":"2026-06-04","c":"2026-01-21","ap":"Active","ar":null,"g":{"2026-01":196.02,"2026-02":280.79,"2026-03":288.87,"2026-04":321.98,"2026-05":103.17,"2026-06":66.17},"t":1257.01,"st":"Closed Won"},{"a":"Vivex Biologics, Inc.","o":"Kate Olivares","e":825.0,"r":"2026-04-17","c":"2026-01-15","ap":null,"ar":"Active","g":{"2026-01":799.71,"2026-02":395.99,"2026-03":222.54,"2026-04":213.11,"2026-05":258.39,"2026-06":7.11},"t":1896.84,"st":"Closed Won"},{"a":"TAVco Holdings I LLC","o":"Matthew Frost","e":681.6,"r":"2026-08-02","c":"2026-05-01","ap":"Active","ar":null,"g":{"2026-04":294.46,"2026-05":73.92,"2026-06":85.44},"t":453.82,"st":"Closed Won"},{"a":"Shri Krishna Inc","o":"Matthew Frost","e":25.0,"r":"2026-09-04","c":"2026-05-05","ap":"Active","ar":null,"g":{"2026-04":248.36,"2026-05":146.14,"2026-06":57.15},"t":451.65,"st":"Closed Won"},{"a":"Rippa USA Sales LLC.","o":"Matthew Frost","e":365.0,"r":"2026-03-09","c":"2025-10-28","ap":null,"ar":"Active","g":{"2025-10":-2.82,"2025-11":334.06,"2025-12":283.53,"2026-01":1.84,"2026-02":65.67,"2026-03":615.47,"2026-04":329.61,"2026-05":60.53,"2026-06":37.54},"t":1725.42,"st":"Closed Won"},{"a":"Berkovitch & Bouskila Pllc","o":"Kate Olivares","e":130.0,"r":"2026-01-01","c":"2025-11-19","ap":"Active","ar":null,"g":{"2025-05":6.28,"2025-06":6.74,"2025-07":28.18,"2025-08":28.1,"2025-09":38.89,"2025-10":41.44,"2025-11":38.26,"2025-12":504.1,"2026-01":123.47,"2026-02":397.67,"2026-03":182.22,"2026-04":315.29,"2026-05":109.37},"t":1820.0,"st":"Closed Won"},{"a":"Landa Cleary Travel Co. Inc. D.B.A. Mater Dei Tours","o":"Arianna Modesti","e":281.77,"r":"2026-08-29","c":"2026-08-03","ap":"Inactive","ar":null,"g":{"2026-04":372.71,"2026-05":51.34},"t":424.04,"st":"Onboarding"},{"a":"Liberty Orchards LLC","o":"Kate Olivares","e":366.0,"r":"2025-12-15","c":"2025-10-01","ap":"Active","ar":null,"g":{"2025-10":5.62,"2025-11":79.41,"2025-12":79.85,"2026-01":77.95,"2026-02":130.49,"2026-03":1012.01,"2026-04":80.66,"2026-05":108.91,"2026-06":214.58},"t":1789.47,"st":"Closed Won"},{"a":"Paydirt Earthworks Support Services LLC","o":"Matthew Frost","e":269.5,"r":"2026-02-15","c":"2025-12-10","ap":null,"ar":"Active","g":{"2025-12":213.76,"2026-01":355.92,"2026-02":339.77,"2026-03":275.63,"2026-04":193.46,"2026-05":163.97,"2026-06":35.22},"t":1577.72,"st":"Closed Won"},{"a":"YRS LLC","o":"Matthew Frost","e":0.0,"r":"2026-07-18","c":"2026-04-29","ap":"Active","ar":null,"g":{"2026-04":69.96,"2026-05":161.87,"2026-06":138.22},"t":370.06,"st":"Closed Won"},{"a":"Habitat for Humanity-Anchorage","o":"Matthew Frost","e":72.0,"r":"2026-01-25","c":"2025-09-16","ap":"Active","ar":null,"g":{"2025-09":9.36,"2025-10":121.81,"2025-11":68.46,"2025-12":208.18,"2026-01":104.78,"2026-02":113.48,"2026-03":120.27,"2026-04":188.36,"2026-05":80.01,"2026-06":77.2},"t":1091.91,"st":"Closed Won"},{"a":"DataLinks LLC","o":"Arianna Modesti","e":315.9,"r":"2026-10-25","c":"2026-08-24","ap":"Active","ar":null,"g":{"2026-06":332.94},"t":332.94,"st":"Onboarding"},{"a":"Field Sports Publishing, Inc.","o":"Matthew Frost","e":0.0,"r":"2026-05-17","c":"2026-02-05","ap":"Active","ar":"Active","g":{"2026-01":-0.3,"2026-02":201.5,"2026-03":74.47,"2026-04":141.29,"2026-05":95.76,"2026-06":92.07},"t":604.78,"st":"Closed Won"},{"a":"MAV Aqua LLC","o":"Kate Olivares","e":95.8,"r":"2025-12-15","c":"2025-09-01","ap":"Active","ar":null,"g":{"2025-09":2.13,"2025-10":212.78,"2025-11":65.57,"2025-12":36.13,"2026-01":28.12,"2026-02":44.35,"2026-03":40.56,"2026-04":279.73,"2026-05":35.81,"2026-06":2.66},"t":747.83,"st":"Closed Won"},{"a":"Boston Granite Exchange","o":"Arianna Modesti","e":448.1,"r":"2026-09-26","c":"2026-06-30","ap":"Active","ar":null,"g":{"2026-05":180.96,"2026-06":106.16},"t":287.12,"st":"Onboarding"},{"a":"ALM Ortho, Inc","o":"Arianna Modesti","e":442.7,"r":"2026-09-06","c":"2026-05-12","ap":"Inactive","ar":null,"g":{"2026-04":-0.86,"2026-05":285.53},"t":284.68,"st":"Closed Won"},{"a":"ANALYTICAL WATER SOLUTIONS INC.","o":"Kate Olivares","e":55.61,"r":"2025-12-29","c":"2025-08-07","ap":"Active","ar":"Churned","g":{"2025-08":44.9,"2025-09":56.64,"2025-10":57.28,"2025-11":17.44,"2025-12":33.49,"2026-01":16.89,"2026-02":209.1,"2026-03":36.7,"2026-04":149.39,"2026-05":84.52,"2026-06":48.18},"t":754.54,"st":"Closed Won"},{"a":"Navi Transport Services LLC","o":"Arianna Modesti","e":330.98,"r":"2026-08-20","c":"2026-08-24","ap":"Inactive","ar":null,"g":{"2026-04":199.13,"2026-05":67.85},"t":266.98,"st":"Onboarding"},{"a":"TecTeam LLC","o":"Mass Niang","e":474.6,"r":"2026-03-09","c":"2025-10-28","ap":"Active","ar":null,"g":{"2025-10":90.8,"2025-11":14.56,"2025-12":68.47,"2026-01":25.41,"2026-02":46.8,"2026-03":79.07,"2026-04":278.9,"2026-05":-12.53},"t":591.49,"st":"Closed Won"},{"a":"Remotees LLC","o":"Matthew Frost","e":367.35,"r":"2026-06-26","c":"2026-01-29","ap":"Active","ar":null,"g":{"2026-01":3.94,"2026-02":39.88,"2026-03":141.94,"2026-04":104.1,"2026-05":109.19,"2026-06":45.48},"t":444.53,"st":"Closed Won"},{"a":"Wellness Warrior","o":"Arianna Modesti","e":465.0,"r":"2026-09-05","c":"2026-06-29","ap":"Churned","ar":null,"g":{"2026-04":252.9},"t":252.9,"st":"Onboarding"},{"a":"Bottle Barn","o":"Matthew Frost","e":251.6,"r":"2026-05-09","c":"2026-01-06","ap":"Active","ar":null,"g":{"2026-01":48.57,"2026-02":50.51,"2026-03":43.52,"2026-04":78.15,"2026-05":130.15,"2026-06":44.45},"t":395.36,"st":"Closed Won"},{"a":"ReSure Tax Tactics and Strategies LLC","o":"Kate Olivares","e":115.73,"r":"2025-10-26","c":"2025-05-29","ap":"Active","ar":"Active","g":{"2025-05":-0.12,"2025-06":2.28,"2025-07":57.56,"2025-08":44.4,"2025-09":140.73,"2025-10":120.31,"2025-11":86.48,"2025-12":99.0,"2026-01":95.24,"2026-02":125.02,"2026-03":111.19,"2026-04":136.34,"2026-05":62.95,"2026-06":51.14},"t":1132.53,"st":"Closed Won"},{"a":"UC Gelato llc","o":"Matthew Frost","e":795.4,"r":"2026-04-12","c":"2025-11-06","ap":"Active","ar":null,"g":{"2025-11":84.54,"2025-12":83.48,"2026-01":81.22,"2026-02":83.2,"2026-03":89.32,"2026-04":82.72,"2026-05":82.3,"2026-06":83.48},"t":670.25,"st":"Closed Won"},{"a":"Advance Displays, Inc.","o":"Matthew Frost","e":745.0,"r":"2026-07-10","c":"2026-03-27","ap":null,"ar":"Active","g":{"2026-02":3.16,"2026-03":322.88,"2026-04":120.44,"2026-05":92.98,"2026-06":34.39},"t":573.86,"st":"Closed Won"},{"a":"Island Containers","o":"Arianna Modesti","e":600.0,"r":"2026-08-08","c":"2026-04-20","ap":"Active","ar":null,"g":{"2026-03":86.21,"2026-04":192.2,"2026-05":45.55,"2026-06":6.33},"t":330.3,"st":"Closed Won"},{"a":"Acme Fine Wines","o":"Kate Olivares","e":100.4,"r":"2026-04-19","c":"2026-01-02","ap":"Active","ar":null,"g":{"2026-01":65.77,"2026-02":162.95,"2026-03":174.24,"2026-04":113.16,"2026-05":61.0,"2026-06":62.97},"t":640.09,"st":"Closed Won"},{"a":"Bauer Home Furnishings","o":"Arianna Modesti","e":300.3,"r":"2026-08-27","c":"2026-04-28","ap":"FTS","ar":"Active","g":{"2026-04":79.13,"2026-05":77.87,"2026-06":78.54},"t":235.54,"st":"Closed Won"},{"a":"Texas Winds Musical Outreach","o":"Matthew Frost","e":145.7,"r":"2026-03-16","c":"2025-11-26","ap":"Active","ar":null,"g":{"2025-11":0.6,"2025-12":98.39,"2026-01":79.63,"2026-02":63.8,"2026-03":100.63,"2026-04":89.04,"2026-05":81.98,"2026-06":60.1},"t":574.17,"st":"Closed Won"},{"a":"The Arts Club of Chicago","o":"Matthew Frost","e":146.0,"r":"2026-02-01","c":"2025-11-05","ap":"Active","ar":"Churned","g":{"2025-11":64.1,"2025-12":86.74,"2026-01":101.1,"2026-02":67.48,"2026-03":159.89,"2026-04":67.81,"2026-05":75.49,"2026-06":67.7},"t":690.31,"st":"Closed Won"},{"a":"Paragon Oilfield Products","o":"Arianna Modesti","e":327.8,"r":"2026-09-04","c":"2026-05-12","ap":"Inactive","ar":null,"g":{"2026-04":-0.15,"2026-05":204.71},"t":204.55,"st":"Closed Won"},{"a":"METI Dallas, LLC","o":"Kate Olivares","e":68.82,"r":"2026-01-04","c":"2025-07-11","ap":null,"ar":"Active","g":{"2025-07":57.14,"2025-08":48.39,"2025-09":34.36,"2025-10":14.24,"2025-11":68.82,"2025-12":7.78,"2026-03":76.87,"2026-04":131.72,"2026-05":-0.15,"2026-06":71.11},"t":510.28,"st":"Closed Won"},{"a":"2Work","o":"Matthew Frost","e":355.0,"r":"2026-07-24","c":"2026-04-06","ap":"Active","ar":null,"g":{"2026-03":134.94,"2026-04":36.23,"2026-05":164.61},"t":335.77,"st":"Closed Won"},{"a":"Star Blue Interpreting Service, LLC","o":"Kate Olivares","e":50.0,"r":"2025-12-22","c":"2025-08-11","ap":"Active","ar":null,"g":{"2025-08":15.4,"2025-09":30.98,"2025-10":42.2,"2025-11":129.68,"2025-12":49.63,"2026-01":37.62,"2026-02":35.36,"2026-03":24.25,"2026-04":45.72,"2026-05":110.42,"2026-06":24.85},"t":546.12,"st":"Closed Won"},{"a":"Coastal Speech Pathology, LLC.","o":"Kate Olivares","e":504.98,"r":"2025-12-29","c":"2025-08-15","ap":"Active","ar":null,"g":{"2025-08":2.34,"2025-09":0.96,"2025-10":529.98,"2025-11":23.23,"2025-12":22.62,"2026-01":23.56,"2026-02":47.91,"2026-03":50.82,"2026-04":70.5,"2026-05":54.5,"2026-06":52.11},"t":878.54,"st":"Closed Won"},{"a":"CLS Brands LLC","o":"Kate Olivares","e":103.89,"r":"2025-10-29","c":"2025-06-18","ap":"Active","ar":null,"g":{"2025-06":10.12,"2025-07":13.23,"2025-08":110.29,"2025-09":2.35,"2025-10":80.28,"2025-11":2.55,"2025-12":2.9,"2026-01":2.39,"2026-02":2.85,"2026-03":4.02,"2026-04":40.26,"2026-05":67.82,"2026-06":65.3},"t":404.35,"st":"Closed Won"},{"a":"Places to Age","o":"Matthew Frost","e":25.0,"r":"2026-02-27","c":"2025-10-08","ap":"Active","ar":null,"g":{"2025-10":35.67,"2025-11":35.13,"2025-12":34.34,"2026-01":34.08,"2026-02":43.91,"2026-03":34.46,"2026-04":47.32,"2026-05":67.37,"2026-06":56.75},"t":389.04,"st":"Closed Won"},{"a":"Cross Engineering LLC","o":"Matthew Frost","e":394.43,"r":"2026-07-20","c":"2026-03-27","ap":null,"ar":"Active","g":{"2026-03":47.31,"2026-04":66.72,"2026-05":74.34,"2026-06":24.83},"t":213.19,"st":"Closed Won"},{"a":"Brian Schmidt Builder","o":"Arianna Modesti","e":316.95,"r":"2026-08-08","c":"2026-04-20","ap":"Active","ar":null,"g":{"2026-03":102.48,"2026-04":101.47,"2026-05":35.75,"2026-06":23.94},"t":263.64,"st":"Closed Won"},{"a":"Knorr Marketing","o":"Matthew Frost","e":52.0,"r":"2026-02-13","c":"2025-11-05","ap":null,"ar":"Active","g":{"2025-09":-0.1,"2025-10":41.85,"2025-11":1151.25,"2025-12":1926.04,"2026-01":160.83,"2026-02":15.88,"2026-03":-2.41,"2026-04":120.83,"2026-05":3.02,"2026-06":34.49},"t":3451.68,"st":"Closed Won"},{"a":"Verde Recruitment LLC","o":"Arianna Modesti","e":625.0,"r":"2026-09-04","c":"2026-05-06","ap":"Active","ar":null,"g":{"2026-04":45.96,"2026-05":56.88,"2026-06":38.52},"t":141.36,"st":"Closed Won"},{"a":"Stupendous Events LLC","o":"Kate Olivares","e":50.0,"r":"2025-11-06","c":"2025-06-09","ap":"Active","ar":null,"g":{"2025-07":0.44,"2025-08":6.36,"2025-09":18.38,"2025-10":17.58,"2025-11":21.82,"2025-12":19.66,"2026-01":4.97,"2026-02":-0.01,"2026-03":2.0,"2026-04":1.49,"2026-05":69.43,"2026-06":64.16},"t":226.28,"st":"Closed Won"},{"a":"Weland Clinical Laboratories, P.C.","o":"Kate Olivares","e":105.0,"r":"2025-10-25","c":"2025-05-28","ap":"Inactive","ar":null,"g":{"2025-06":5.38,"2025-07":28.11,"2025-08":119.43,"2025-09":175.41,"2025-10":134.97,"2025-11":139.3,"2025-12":82.47,"2026-01":51.02,"2026-02":210.47,"2026-03":82.82,"2026-04":121.78,"2026-05":6.98},"t":1158.14,"st":"Closed Won"},{"a":"Marcus & Pollack LLP","o":"Kate Olivares","e":208.9,"r":"2026-06-04","c":"2026-01-15","ap":"Active","ar":null,"g":{"2026-01":-1.25,"2026-02":42.7,"2026-03":34.85,"2026-04":42.44,"2026-05":42.9,"2026-06":42.75},"t":204.4,"st":"Closed Won"},{"a":"Meralex Farm, Inc.","o":"Kate Olivares","e":442.68,"r":"2025-10-29","c":"2025-06-04","ap":"Inactive","ar":null,"g":{"2025-06":10.29,"2025-07":138.14,"2025-08":1.33,"2025-09":113.94,"2025-10":44.0,"2025-11":436.15,"2025-12":15.56,"2026-01":110.45,"2026-02":27.91,"2026-03":32.53,"2026-04":88.7,"2026-05":31.6},"t":1050.6,"st":"Closed Won"},{"a":"Paine Group, Inc","o":"Matthew Frost","e":364.0,"r":"2026-08-15","c":"2026-03-20","ap":"Active","ar":null,"g":{"2026-03":38.78,"2026-04":59.84,"2026-05":59.77},"t":158.39,"st":"Closed Won"},{"a":"South Earth Property Management","o":"Kate Olivares","e":975.0,"r":"2025-10-18","c":"2025-05-30","ap":"Active","ar":"Churned","g":{"2025-05":-0.06,"2025-06":32.03,"2025-07":27.8,"2025-08":28.03,"2025-09":28.98,"2025-10":26.44,"2025-11":28.37,"2025-12":30.86,"2026-01":27.83,"2026-02":34.61,"2026-03":65.38,"2026-04":43.73,"2026-05":40.42,"2026-06":31.03},"t":445.46,"st":"Closed Won"},{"a":"Wyoming Traders","o":"Matthew Frost","e":156.0,"r":"2026-05-29","c":"2026-01-15","ap":null,"ar":"Active","g":{"2026-01":0.96,"2026-02":35.98,"2026-03":29.64,"2026-04":32.58,"2026-05":40.46,"2026-06":34.06},"t":173.69,"st":"Closed Won"},{"a":"American Shoring Inc","o":"Matthew Frost","e":140.0,"r":"2026-01-22","c":"2025-10-07","ap":"Active","ar":"Churned","g":{"2025-09":-0.15,"2025-10":-0.06,"2025-11":37.47,"2025-12":64.44,"2026-01":26.59,"2026-02":43.14,"2026-03":53.58,"2026-04":39.77,"2026-05":42.69,"2026-06":22.23},"t":329.69,"st":"Closed Won"},{"a":"Mark S Dill DDS PLLC","o":"Matthew Frost","e":182.97,"r":"2026-05-09","c":"2026-01-27","ap":"Active","ar":null,"g":{"2026-01":0.87,"2026-02":0.47,"2026-03":17.49,"2026-04":39.73,"2026-05":17.19,"2026-06":46.03},"t":121.78,"st":"Closed Won"},{"a":"scenic world LLC","o":"Kate Olivares","e":50.0,"r":"2025-10-19","c":"2025-06-10","ap":"Active","ar":null,"g":{"2025-06":3.28,"2025-07":3.1,"2025-08":2.08,"2025-09":33.85,"2025-10":34.39,"2025-11":34.03,"2025-12":33.65,"2026-01":33.73,"2026-02":33.69,"2026-03":34.08,"2026-04":33.91,"2026-05":34.0,"2026-06":33.9},"t":347.69,"st":"Closed Won"},{"a":"Willard Manufacturing","o":"Arianna Modesti","e":241.6,"r":"2026-10-03","c":"2026-08-17","ap":"Active","ar":null,"g":{"2026-05":46.72,"2026-06":54.47},"t":101.19,"st":"Onboarding"},{"a":"Shree Group","o":"Kate Olivares","e":1067.7,"r":"2026-07-24","c":"2026-04-27","ap":"Active","ar":null,"g":{"2026-04":27.01,"2026-05":45.6,"2026-06":26.94},"t":99.54,"st":"Closed Won"},{"a":"Talcan Systems, LLC","o":"Arianna Modesti","e":319.3,"r":"2026-10-24","c":"2026-07-16","ap":"Active","ar":null,"g":{"2026-06":98.55},"t":98.55,"st":"Onboarding"},{"a":"Stigall Sales Inc.","o":"Matthew Frost","e":455.0,"r":"2026-07-06","c":"2026-03-20","ap":"Active","ar":null,"g":{"2026-02":103.29,"2026-03":-0.43,"2026-04":51.67,"2026-05":41.34},"t":195.87,"st":"Closed Won"},{"a":"Skycrest Group llc","o":"Matthew Frost","e":318.54,"r":"2026-06-14","c":"2026-03-27","ap":"Active","ar":null,"g":{"2026-03":67.68,"2026-04":108.82,"2026-05":57.15,"2026-06":35.53},"t":269.18,"st":"Closed Won"},{"a":"gh Package Product Testing and Consulting, Inc.","o":"Matthew Frost","e":120.31,"r":"2026-04-16","c":"2025-11-28","ap":"Active","ar":null,"g":{"2025-11":0.52,"2025-12":31.74,"2026-01":29.4,"2026-02":32.42,"2026-03":45.95,"2026-04":33.28,"2026-05":28.78,"2026-06":27.89},"t":229.99,"st":"Closed Won"},{"a":"Performance Supply LLC","o":"Kate Olivares","e":13.2,"r":"2026-04-25","c":"2026-04-02","ap":"Active","ar":"Active","g":{"2026-03":21.8,"2026-04":36.55,"2026-05":26.2,"2026-06":26.58},"t":111.13,"st":"Closed Won"},{"a":"Lock Solid Storage","o":"Kate Olivares","e":55.89,"r":"2025-12-28","c":"2025-07-31","ap":"Active","ar":null,"g":{"2025-07":-0.06,"2026-01":-0.15,"2026-02":-0.98,"2026-03":23.86,"2026-04":22.18,"2026-05":32.7,"2026-06":32.56},"t":110.11,"st":"Closed Won"},{"a":"Empire Consulting Group, Inc.","o":"Kate Olivares","e":1.49,"r":"2026-03-23","c":"2025-11-24","ap":"Active","ar":null,"g":{"2025-11":26.49,"2026-04":19.89,"2026-05":45.17,"2026-06":22.06},"t":113.61,"st":"Closed Won"},{"a":"D.R. Stephens Estate Wines, LLC","o":"Kate Olivares","e":68.2,"r":"2026-05-21","c":"2026-01-14","ap":null,"ar":"Inactive","g":{"2026-01":85.66,"2026-02":43.27,"2026-04":43.17,"2026-05":43.7},"t":215.8,"st":"Closed Won"},{"a":"GF Equine LLC","o":"Matthew Frost","e":0.0,"r":"2026-07-04","c":"2026-03-10","ap":"Active","ar":null,"g":{"2026-02":41.2,"2026-03":18.23,"2026-04":28.59,"2026-05":56.84},"t":144.85,"st":"Closed Won"},{"a":"WHITE COLLAR MEDIA","o":"Arianna Modesti","e":231.27,"r":"2026-09-24","c":"2026-08-24","ap":"Active","ar":"Active","g":{"2026-04":39.96,"2026-05":-1.86,"2026-06":45.66},"t":83.76,"st":"Onboarding"},{"a":"Taylor Brothers Architectural Products","o":"Kate Olivares","e":206.2,"r":"2025-12-29","c":"2025-12-08","ap":"Active","ar":null,"g":{"2025-10":1.31,"2025-11":7.85,"2025-12":78.22,"2026-01":77.6,"2026-02":180.16,"2026-03":74.43,"2026-04":60.92,"2026-05":3.4,"2026-06":18.48},"t":502.36,"st":"Closed Won"},{"a":"Big House Group LLC","o":"Matthew Frost","e":403.0,"r":"2026-06-04","c":"2026-01-20","ap":"Inactive","ar":"Churned","g":{"2026-01":300.99,"2026-02":372.6,"2026-03":168.94,"2026-04":79.67,"2026-05":1.96},"t":924.16,"st":"Closed Won"},{"a":"365 Archery LLC","o":"Kate Olivares","e":534.56,"r":"2026-04-25","c":"2025-12-17","ap":null,"ar":"Active","g":{"2025-12":-0.14,"2026-01":101.61,"2026-02":19.83,"2026-03":34.83,"2026-04":41.99,"2026-05":18.72,"2026-06":19.29},"t":236.14,"st":"Closed Won"},{"a":"Austin Elementary PTO","o":"Matthew Frost","e":50.0,"r":"2026-02-26","c":"2025-10-06","ap":"Active","ar":null,"g":{"2025-10":3.13,"2025-11":26.86,"2025-12":24.21,"2026-01":19.84,"2026-02":20.23,"2026-03":45.92,"2026-04":32.95,"2026-05":19.86,"2026-06":22.94},"t":215.95,"st":"Closed Won"},{"a":"Handled Commerce","o":"Kate Olivares","e":100.0,"r":"2025-11-09","c":"2025-06-21","ap":null,"ar":"Active","g":{"2025-06":2.41,"2025-07":6.66,"2025-08":3.53,"2025-09":29.32,"2025-11":34.58,"2025-12":65.85,"2026-01":25.54,"2026-02":27.55,"2026-03":124.82,"2026-04":29.58,"2026-05":18.7,"2026-06":24.65},"t":393.17,"st":"Closed Won"},{"a":"Amlife Global LLC","o":"Kate Olivares","e":0.0,"r":"2026-04-17","c":"2025-12-04","ap":"Active","ar":null,"g":{"2025-12":23.55,"2026-01":23.61,"2026-03":23.85,"2026-04":23.85,"2026-05":23.83,"2026-06":23.86},"t":142.55,"st":"Closed Won"},{"a":"Hemm Ventures LLC","o":"Kate Olivares","e":50.0,"r":"2026-04-17","c":"2025-12-08","ap":"Active","ar":null,"g":{"2025-12":23.85,"2026-01":23.3,"2026-03":23.47,"2026-04":23.85,"2026-05":23.83,"2026-06":23.85},"t":142.15,"st":"Closed Won"},{"a":"Trustwell Brands LLC","o":"Kate Olivares","e":0.0,"r":"2026-04-17","c":"2025-12-04","ap":"Active","ar":null,"g":{"2025-12":23.85,"2026-01":23.1,"2026-02":23.95,"2026-03":23.75,"2026-04":23.7,"2026-05":23.85,"2026-06":23.85},"t":166.04,"st":"Closed Won"},{"a":"Meraki Ventures LLC","o":"Kate Olivares","e":25.0,"r":"2026-04-30","c":"2025-12-08","ap":"Active","ar":null,"g":{"2025-12":-0.15,"2026-01":23.31,"2026-03":23.7,"2026-04":23.7,"2026-05":23.79,"2026-06":23.53},"t":117.88,"st":"Closed Won"},{"a":"Beyond Pickleball LLC","o":"Matthew Frost","e":428.54,"r":"2026-07-06","c":"2026-03-17","ap":"Active","ar":null,"g":{"2026-02":-50.13,"2026-03":99.84,"2026-06":69.9},"t":119.61,"st":"Closed Won"},{"a":"Avenue 8 Group Inc","o":"Kate Olivares","e":25.0,"r":"2026-07-06","c":"2026-02-06","ap":"Churned","ar":"Active","g":{"2026-02":103.06,"2026-03":41.26,"2026-05":34.72,"2026-06":34.85},"t":213.89,"st":"Closed Won"},{"a":"AI Talent Now, LLC","o":"Matthew Frost","e":103.64,"r":"2026-04-17","c":"2025-11-24","ap":"Churned","ar":null,"g":{"2025-11":-0.29,"2026-04":69.15},"t":68.87,"st":"Closed Won"},{"a":"CRNA Locum Jobs","o":"Arianna Modesti","e":876.5,"r":"2026-08-15","c":"2026-08-24","ap":"Active","ar":null,"g":{"2026-05":-0.3,"2026-06":67.13},"t":66.83,"st":"Onboarding"},{"a":"Covenant Construction Group Inc","o":"Arianna Modesti","e":435.0,"r":"2026-09-19","c":"2026-08-17","ap":"Active","ar":null,"g":{"2026-05":12.61,"2026-06":50.1},"t":62.71,"st":"Onboarding"},{"a":"Congdon & Coleman Real Estate","o":"Kate Olivares","e":288.85,"r":"2025-10-25","c":"2025-05-28","ap":"Active","ar":null,"g":{"2025-06":209.75,"2025-07":608.03,"2025-08":353.88,"2025-09":302.84,"2025-10":94.57,"2025-11":19.7,"2025-12":5.05,"2026-01":6.83,"2026-02":5.76,"2026-03":-51.75,"2026-04":5.71,"2026-05":-4.19,"2026-06":61.18},"t":1617.36,"st":"Closed Won"},{"a":"Smart Launch LLC","o":"Kate Olivares","e":25.3,"r":"2026-05-22","c":"2025-12-31","ap":null,"ar":"Inactive","g":{"2025-12":-0.15,"2026-01":19.96,"2026-02":28.09,"2026-03":28.55,"2026-04":29.88,"2026-05":29.58},"t":135.91,"st":"Closed Won"},{"a":"NOFD Firewatch Detail","o":"Arianna Modesti","e":0.0,"r":"2026-08-20","c":"2026-04-20","ap":null,"ar":"Active","g":{"2026-03":-0.15,"2026-04":16.95,"2026-05":39.3,"2026-06":-0.28},"t":55.82,"st":"Closed Won"},{"a":"JR Prime Pro Construction, LLC","o":"Arianna Modesti","e":325.0,"r":"2026-08-15","c":"2026-08-03","ap":"Active","ar":null,"g":{"2026-03":31.9,"2026-04":2.44,"2026-05":53.38},"t":87.72,"st":"Onboarding"},{"a":"VetNecessity UC LLC","o":"Matthew Frost","e":0.0,"r":"2026-07-04","c":"2026-02-04","ap":"Active","ar":null,"g":{"2026-01":0.23,"2026-02":17.61,"2026-03":81.18,"2026-04":17.89,"2026-05":17.34,"2026-06":16.83},"t":151.07,"st":"Closed Won"},{"a":"inbanx, Inc.","o":"Matthew Frost","e":119.52,"r":"2026-02-27","c":"2025-10-20","ap":"Active","ar":null,"g":{"2025-10":24.94,"2025-12":24.85,"2026-03":24.85,"2026-04":24.85,"2026-06":24.85},"t":124.34,"st":"Closed Won"},{"a":"PC Enterprises","o":"Matthew Frost","e":0.0,"r":"2026-01-23","c":"2025-10-24","ap":null,"ar":"Active","g":{"2025-10":6.12,"2025-11":82.12,"2025-12":135.56,"2026-01":117.85,"2026-02":42.74,"2026-03":93.15,"2026-04":24.81,"2026-05":32.24,"2026-06":-8.28},"t":526.3,"st":"Closed Won"},{"a":"HOB Industries","o":"Matthew Frost","e":135.8,"r":"2026-04-12","c":"2025-11-26","ap":"Churned","ar":null,"g":{"2025-11":-1.3,"2025-12":44.59,"2026-01":40.77,"2026-02":101.28,"2026-04":43.79},"t":229.12,"st":"Closed Won"},{"a":"Plat4orm","o":"Arianna Modesti","e":412.16,"r":"2026-08-31","c":"2026-06-29","ap":"Churned","ar":null,"g":{"2026-03":-1.1,"2026-04":42.14},"t":41.04,"st":"Onboarding"},{"a":"Columbia Paint and Wallcover, Inc.","o":"Matthew Frost","e":66.61,"r":"2026-01-29","c":"2025-09-19","ap":"Active","ar":null,"g":{"2025-09":21.7,"2025-10":13.42,"2025-11":92.23,"2025-12":100.97,"2026-01":2.08,"2026-02":3.26,"2026-03":123.84,"2026-04":33.53,"2026-05":2.28,"2026-06":6.19},"t":399.51,"st":"Closed Won"},{"a":"JSC Distribution LLC","o":"Kate Olivares","e":137.54,"r":"2026-04-30","c":"2025-12-26","ap":"Churned","ar":"Inactive","g":{"2025-12":-0.39,"2026-01":26.76,"2026-02":458.08,"2026-03":35.18,"2026-04":39.45},"t":559.07,"st":"Closed Won"},{"a":"Barrel-Art LLC","o":"Matthew Frost","e":333.23,"r":"2026-07-03","c":"2026-03-05","ap":"Active","ar":"Churned","g":{"2026-02":83.14,"2026-03":81.54,"2026-04":16.69,"2026-05":17.59,"2026-06":4.76},"t":203.72,"st":"Closed Won"},{"a":"Carismo","o":"Arianna Modesti","e":400.0,"r":"2026-10-09","c":"2026-08-24","ap":"Active","ar":null,"g":{"2026-05":22.02,"2026-06":11.86},"t":33.88,"st":"Onboarding"},{"a":"Vitamin Science LLC","o":"Kate Olivares","e":0.0,"r":"2026-04-17","c":"2025-12-16","ap":"Active","ar":null,"g":{"2025-12":-0.41,"2026-01":27.23,"2026-02":10.01,"2026-03":10.82,"2026-04":10.43,"2026-05":9.74,"2026-06":10.35},"t":78.17,"st":"Closed Won"},{"a":"ETA Signs","o":"Matthew Frost","e":395.0,"r":"2026-04-30","c":"2025-12-09","ap":null,"ar":"Active","g":{"2025-12":198.85,"2026-01":15.16,"2026-02":5.41,"2026-03":-0.53,"2026-04":10.51,"2026-05":16.89,"2026-06":2.73},"t":249.02,"st":"Closed Won"},{"a":"Jenny and Francois Selections","o":"Kate Olivares","e":25.0,"r":"2026-05-15","c":"2026-01-09","ap":null,"ar":"Active","g":{"2025-12":1.01,"2026-01":10.03,"2026-02":10.19,"2026-03":3.43,"2026-04":13.94,"2026-05":-1.81,"2026-06":29.36},"t":66.14,"st":"Closed Won"},{"a":"Mighty of Arizona","o":"Matthew Frost","e":0.0,"r":"2026-01-23","c":"2025-10-24","ap":null,"ar":"Active","g":{"2025-10":8.06,"2025-11":38.19,"2025-12":33.47,"2026-01":36.58,"2026-02":15.62,"2026-03":14.69,"2026-04":18.94,"2026-05":9.55,"2026-06":9.7},"t":184.8,"st":"Closed Won"},{"a":"L&M Mail & Courier","o":"Kate Olivares","e":385.0,"r":"2026-01-08","c":"2025-08-27","ap":"Active","ar":"Active","g":{"2025-08":7.3,"2025-09":1.73,"2025-10":16.3,"2025-11":140.77,"2025-12":54.39,"2026-01":163.83,"2026-02":65.3,"2026-03":84.89,"2026-04":82.76,"2026-05":-43.53,"2026-06":-13.79},"t":559.95,"st":"Closed Won"},{"a":"Commercial Fire & Security","o":"Kate Olivares","e":50.0,"r":"2025-11-28","c":"2025-07-24","ap":null,"ar":"Active","g":{"2025-07":5.11,"2025-08":2.75,"2025-09":4.65,"2025-10":-0.67,"2025-11":5.3,"2025-12":11.04,"2026-01":3.54,"2026-02":5.58,"2026-03":1.54,"2026-04":0.43,"2026-05":-0.59,"2026-06":25.16},"t":63.84,"st":"Closed Won"},{"a":"Thistle and Amber LLC","o":"Matthew Frost","e":361.77,"r":"2026-06-13","c":"2026-01-28","ap":"Inactive","ar":null,"g":{"2026-01":-0.15,"2026-02":24.83,"2026-04":24.86},"t":49.54,"st":"Closed Won"},{"a":"Mindego Ridge Vineyard","o":"Kate Olivares","e":134.0,"r":"2026-02-21","c":"2026-01-08","ap":null,"ar":"Inactive","g":{"2026-01":26.67,"2026-03":24.08,"2026-04":24.45},"t":75.21,"st":"Closed Won"},{"a":"Bespoke Creations LLC","o":"Kate Olivares","e":25.0,"r":"2026-04-30","c":"2025-12-16","ap":"Active","ar":null,"g":{"2025-12":23.71,"2026-01":23.44,"2026-03":23.85,"2026-06":23.64},"t":94.65,"st":"Closed Won"},{"a":"Placewise LLC","o":"Matthew Frost","e":410.0,"r":"2026-07-24","c":"2026-04-27","ap":null,"ar":"Active","g":{"2026-03":5.31,"2026-04":10.26,"2026-05":8.0,"2026-06":2.71},"t":26.28,"st":"Closed Won"},{"a":"K2 Parts Inc","o":"Arianna Modesti","e":195.0,"r":"2026-08-08","c":"2026-07-06","ap":"Active","ar":null,"g":{"2026-03":242.49,"2026-06":19.81},"t":262.3,"st":"Onboarding"},{"a":"Navimow Inc","o":"Kate Olivares","e":462.0,"r":"2025-11-30","c":"2025-12-30","ap":null,"ar":"Active","g":{"2025-12":28.88,"2026-01":49.33,"2026-02":-0.15,"2026-03":3.28,"2026-05":-5.38,"2026-06":22.89},"t":98.86,"st":"Closed Won"},{"a":"Pelican Head Industries","o":"Kate Olivares","e":54.88,"r":"2026-01-04","c":"2025-06-25","ap":"Active","ar":null,"g":{"2025-06":0.62,"2025-07":44.11,"2025-08":0.66,"2025-09":9.95,"2025-10":9.61,"2025-12":124.76,"2026-02":0.32,"2026-05":12.89},"t":202.92,"st":"Closed Won"},{"a":"Vertex Holdings","o":"Matthew Frost","e":331.41,"r":"2026-06-25","c":"2026-03-10","ap":"Active","ar":null,"g":{"2026-03":3.74,"2026-04":3.22,"2026-05":4.83,"2026-06":3.27},"t":15.07,"st":"Closed Won"},{"a":"Advanced Medical Software Solutions, Inc.","o":"Matthew Frost","e":105.0,"r":"2026-01-23","c":"2025-09-10","ap":null,"ar":"Active","g":{"2025-09":12.14,"2025-10":-0.91,"2025-11":-2.49,"2025-12":-1.74,"2026-01":87.32,"2026-02":81.83,"2026-03":179.44,"2026-04":12.14,"2026-05":-0.42,"2026-06":-1.61},"t":365.7,"st":"Closed Won"},{"a":"Super Bunny Promo","o":"Matthew Frost","e":11.0,"r":"2026-01-23","c":"2025-10-24","ap":null,"ar":"Active","g":{"2025-10":13.72,"2025-11":22.14,"2025-12":-0.15,"2026-02":-0.32,"2026-03":-0.81,"2026-04":2.3,"2026-05":6.25},"t":43.14,"st":"Closed Won"},{"a":"Mayfield Scientific, LLC","o":"Matthew Frost","e":141.0,"r":"2026-04-03","c":"2025-11-05","ap":"Churned","ar":null,"g":{"2025-11":18.88,"2026-01":47.23,"2026-02":48.85,"2026-03":7.83,"2026-04":7.8},"t":130.59,"st":"Closed Won"},{"a":"Guber Sports Llc","o":"Matthew Frost","e":10.0,"r":"2026-08-15","c":"2026-04-06","ap":null,"ar":"Active","g":{"2026-03":0.16,"2026-05":7.28,"2026-06":5.08},"t":12.53,"st":"Closed Won"},{"a":"Rippa Sales Oklahoma, Llc","o":"Arianna Modesti","e":340.0,"r":"2026-08-15","c":"2026-08-17","ap":null,"ar":"Active","g":{"2026-05":5.95},"t":5.95,"st":"Onboarding"},{"a":"BTK Communications Group, LTD","o":"Matthew Frost","e":190.0,"r":"2026-02-12","c":"2025-10-28","ap":"Active","ar":"Active","g":{"2025-09":4.27,"2025-10":38.77,"2025-11":2.94,"2025-12":0.5,"2026-01":1.95,"2026-02":0.42,"2026-03":1.86,"2026-04":1.17,"2026-05":1.03,"2026-06":3.13},"t":56.04,"st":"Closed Won"},{"a":"ReSure LLC","o":"Kate Olivares","e":50.0,"r":"2025-10-26","c":"2025-05-29","ap":"Active","ar":"Churned","g":{"2025-05":8.46,"2025-06":22.02,"2025-07":9.86,"2025-09":-0.15,"2026-03":9.55,"2026-05":2.4},"t":52.14,"st":"Closed Won"},{"a":"Fort Comfort Services","o":"Matthew Frost","e":84.16,"r":"2026-02-28","c":"2025-10-27","ap":"Inactive","ar":null,"g":{"2025-10":0.61,"2025-11":0.95,"2025-12":0.57,"2026-01":0.57,"2026-02":0.57,"2026-03":0.57,"2026-04":0.57},"t":4.41,"st":"Closed Won"},{"a":"K2X, Inc.","o":"Kate Olivares","e":50.0,"r":"2025-10-29","c":"2025-06-11","ap":"Churned","ar":"Inactive","g":{"2025-06":-0.26,"2025-07":-0.56,"2025-08":-0.43,"2025-09":-0.5,"2025-10":-0.6,"2025-11":-0.84,"2025-12":-0.6,"2026-01":-1.24,"2026-02":3.43,"2026-03":-1.71,"2026-04":-0.26,"2026-05":-0.15},"t":-3.72,"st":"Closed Won"},{"a":"Matte Collection","o":"Arianna Modesti","e":226.55,"r":"2026-10-05","c":"2026-08-17","ap":"Active","ar":null,"g":{"2026-05":-0.15},"t":-0.15,"st":"Onboarding"},{"a":"MJM Construction","o":"Mass Niang","e":89.16,"r":"2026-03-06","c":"2025-10-17","ap":"Active","ar":null,"g":{"2025-10":-0.32,"2025-11":-0.14,"2025-12":191.27,"2026-01":109.47,"2026-02":-0.26,"2026-03":-0.1,"2026-05":-0.61,"2026-06":-0.15},"t":299.16,"st":"Closed Won"},{"a":"Millbrook Distillery LLC dba Tenmile Distillery","o":"Mass Niang","e":150.0,"r":"2026-01-18","c":"2025-12-18","ap":"Active","ar":"Churned","g":{"2025-09":-0.15,"2025-11":-0.39,"2025-12":-0.51,"2026-04":-0.15,"2026-05":-0.72},"t":-1.92,"st":"Closed Won"},{"a":"DQ of New Jersey, Inc.","o":"Matthew Frost","e":125.62,"r":"2026-04-06","c":"2025-12-15","ap":null,"ar":"Active","g":{"2025-12":-0.44,"2026-01":-0.62,"2026-02":-0.67,"2026-03":-0.66,"2026-04":-1.4,"2026-05":-0.8,"2026-06":-0.75},"t":-5.33,"st":"Closed Won"},{"a":"Southside Mighty of Chicago","o":"Matthew Frost","e":0.0,"r":"2026-01-23","c":"2025-10-24","ap":null,"ar":"Active","g":{"2025-11":-0.41,"2026-01":-0.35,"2026-02":-8.7,"2026-03":-4.36,"2026-04":-0.95,"2026-05":-1.85,"2026-06":-1.1},"t":-17.72,"st":"Closed Won"},{"a":"The Makenzie House","o":"Matthew Frost","e":190.0,"r":"2026-05-01","c":"2025-12-08","ap":"Active","ar":null,"g":{"2025-12":525.6,"2026-01":-10.59,"2026-02":-7.32,"2026-03":-5.1,"2026-04":-9.84,"2026-05":-9.75,"2026-06":5.66},"t":488.66,"st":"Closed Won"},{"a":"International Marine Products","o":"Matthew Frost","e":6635.0,"r":"2026-04-11","c":"2025-11-07","ap":"Churned","ar":"Active","g":{"2025-11":-0.07,"2025-12":-7.46,"2026-01":-9.71,"2026-02":-10.14,"2026-03":-9.0,"2026-04":-9.17,"2026-05":-8.81,"2026-06":-4.01},"t":-58.37,"st":"Closed Won"}],"lastPull":"2026-06-15","changes":[{"type":"info","account":"Data verified","rep":"","detail":"New file parsed with currency-safe extraction. Dollar sign and comma formatting stripped from Total GP column. No data changes from Jun 15 pull \u2014 155 accounts confirmed.","severity":"up"}]};
+
+// ======== QUARTERLY GOAL ========
+const Q_GOAL = 105000;          // hardcoded — update each quarter
+const Q_ACTUAL = 67655.62;      // pulled from Current Calendar Quarter Stats, P13
+const Q_ATTAIN_PCT = Math.round(Q_ACTUAL / Q_GOAL * 100 * 10) / 10;
+
+function renderQuarterlyCard() {
+  const pct = Math.min(100, Q_ATTAIN_PCT);
+  const remaining = Q_GOAL - Q_ACTUAL;
+  const color = pct >= 100 ? 'var(--green)' : pct >= 75 ? 'var(--blue)' : pct >= 50 ? 'var(--yellow)' : 'var(--red)';
+  $('qActual').textContent = '$' + Math.round(Q_ACTUAL).toLocaleString();
+  $('qActual').style.color = color;
+  $('qAttainPct').textContent = Q_ATTAIN_PCT + '%';
+  $('qAttainPct').style.color = color;
+  $('qRemaining').textContent = remaining > 0
+    ? '$' + Math.round(remaining).toLocaleString() + ' to goal'
+    : '✓ Goal achieved';
+  $('qProgressBar').style.width = pct + '%';
+  $('qProgressBar').style.background = color;
+  $('qProgressMid').textContent = '$' + Math.round(Q_GOAL / 2).toLocaleString();
+}
+
+// ======== HELPERS ========
+const $ = id => document.getElementById(id);
+const fmt$ = n => n == null ? '—' : '$' + Math.round(n).toLocaleString();
+const fmtPct = n => n == null ? '—' : Math.round(n) + '%';
+const TODAY = new Date('2026-06-15');
+const CURRENT_MONTH = '2026-06';
+const PREV_MONTH = '2026-05';
+const Q2_MONTHS = ['2026-04','2026-05','2026-06'];
+const RAMP_CUTOFF = new Date('2026-03-15'); // 3 months ago from today
+
+function monthsBetween(dateStr) {
+  if (!dateStr) return 1;
+  const d = new Date(dateStr);
+  const diff = (TODAY.getFullYear()-d.getFullYear())*12+(TODAY.getMonth()-d.getMonth());
+  return Math.max(1,diff);
+}
+
+function runRate(acct) { return acct.t / monthsBetween(acct.r); }
+
+function isRamping(acct) {
+  if (!acct.r) return false;
+  return new Date(acct.r) >= RAMP_CUTOFF;
+}
+
+function stageName(acct) { return isRamping(acct) ? 'ramping' : 'ramped'; }
+
+function healthStatus(acct) {
+  const rr = runRate(acct);
+  if (rr >= 300 && rr >= 0.8*acct.e) return 'on-track';
+  if (rr >= 300) return 'watch';
+  return 'at-risk';
+}
+
+function statusOf(acct) {
+  if (acct.st === 'Closed Won') return 'closed';
+  return healthStatus(acct);
+}
+
+function badgeHTML(acct) {
+  const st = statusOf(acct);
+  const map = {'on-track':['on-track','🟢 On Track'],'watch':['watch','🟡 Watch'],'at-risk':['at-risk','🔴 At Risk'],'closed':['closed','⚫ Closed Won']};
+  const [cls,lbl] = map[st]||['','Unknown'];
+  const stage = isRamping(acct);
+  const stageLbl = stage ? '<span class="stage-badge ramping">🆕 Ramping</span>' : '<span class="stage-badge ramped">✅ Ramped</span>';
+  return stageLbl + `<span class="badge ${cls}">${lbl}</span>`;
+}
+
+function allMonths() {
+  const s = new Set();
+  RAW.accounts.forEach(a => Object.keys(a.g).forEach(m => s.add(m)));
+  return Array.from(s).sort();
+}
+
+const MONTHS = allMonths();
+const REPS = [...new Set(RAW.accounts.map(a => a.o))].sort();
+const MONTH_LABELS = MONTHS.map(m => {
+  const [y,mo] = m.split('-');
+  return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+mo-1]+' '+y.substring(2);
+});
+
+// ======== FILTER STATE ========
+let activeReps = new Set(REPS);
+let activeStatuses = new Set(['on-track','watch','at-risk','closed']);
+let activeStages = new Set(['ramping','ramped']);
+let minGP = 0;
+let searchText = '';
+let sortCol = 'a';
+let sortDir = 1;
+
+// ======== TAB NAVIGATION ========
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    $('panel-'+tab.dataset.panel).classList.add('active');
+    if (tab.dataset.panel === 'pacing') renderPacing();
+    if (tab.dataset.panel === 'gap') renderGapAnalysis();
+    if (tab.dataset.panel === 'gpsplit') renderGPSplit();
+  };
+});
+
+// ======== CHANGE BANNER ========
+function toggleBanner() {
+  const body = $('bannerBody');
+  const toggle = $('bannerToggle');
+  body.classList.toggle('open');
+  toggle.textContent = body.classList.contains('open') ? '▲ Hide changes' : '▼ Show changes';
+}
+
+function renderChangeBanner() {
+  const list = $('changeList');
+  if (!RAW.changes || RAW.changes.length === 0) {
+    $('changeBanner').style.display = 'none';
+    return;
+  }
+  list.innerHTML = RAW.changes.map(c => {
+    const cls = c.type==='new_account' ? 'new' : (c.severity==='up' ? 'up' : 'down');
+    const icon = c.type==='new_account' ? '✨' : (c.severity==='up' ? '↑' : '↓');
+    return `<div class="change-item ${cls}"><span>${icon}</span><span><strong class="acct">${c.account}</strong> — ${c.detail}${c.rep ? ' <span style="opacity:.7">('+c.rep.split(' ')[0]+')</span>' : ''}</span></div>`;
+  }).join('');
+  const newCount = RAW.changes.filter(c=>c.type==='new_account').length;
+  const downCount = RAW.changes.filter(c=>c.severity==='down').length;
+  const upCount = RAW.changes.filter(c=>c.severity==='up').length;
+  $('bannerTitle').textContent = `📋 Weekly Refresh Jun 15 · ${newCount} new accounts · ${downCount} GP decreases · ${upCount} GP increases`;
+}
+
+// ======== INIT ========
+function init() {
+  $('lastUpdated').textContent = 'Last data pull: '+RAW.lastPull;
+  renderQuarterlyCard();
+  buildRepFilter();
+  buildFilterHandlers();
+  buildGapMonthSelector();
+  buildSplitMonthSelector();
+  renderChangeBanner();
+  render();
+}
+
+function buildRepFilter() {
+  const wrap = $('repFilter');
+  REPS.forEach(rep => {
+    const sp = document.createElement('span');
+    sp.className = 'chip active';
+    sp.dataset.rep = rep;
+    sp.textContent = rep.split(' ')[0];
+    sp.title = rep;
+    sp.onclick = () => {
+      sp.classList.toggle('active');
+      if (sp.classList.contains('active')) activeReps.add(rep); else activeReps.delete(rep);
+      render();
+    };
+    wrap.appendChild(sp);
+  });
+}
+
+function buildGapMonthSelector() {
+  const sel = $('gapMonthSel');
+  [...MONTHS].reverse().forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m; opt.textContent = MONTH_LABELS[MONTHS.indexOf(m)];
+    if (m === PREV_MONTH) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.onchange = () => renderGapRankTable(sel.value);
+}
+
+function buildSplitMonthSelector() {
+  const sel = $('splitMonthSel');
+  [...MONTHS].reverse().forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m; opt.textContent = MONTH_LABELS[MONTHS.indexOf(m)];
+    if (m === PREV_MONTH) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.onchange = () => renderSplitMonthBreakdown(sel.value);
+}
+
+function buildFilterHandlers() {
+  document.querySelectorAll('#statusFilter .chip').forEach(ch => {
+    ch.onclick = () => {
+      ch.classList.toggle('active');
+      const s = ch.dataset.status;
+      if (ch.classList.contains('active')) activeStatuses.add(s); else activeStatuses.delete(s);
+      render();
+    };
+  });
+  document.querySelectorAll('#stageFilter .chip').forEach(ch => {
+    ch.onclick = () => {
+      ch.classList.toggle('active');
+      const s = ch.dataset.stage;
+      if (ch.classList.contains('active')) activeStages.add(s); else activeStages.delete(s);
+      render();
+    };
+  });
+  const slider = $('gpSlider');
+  slider.oninput = () => { minGP = +slider.value; $('gpSliderVal').textContent='$'+slider.value.toLocaleString(); render(); };
+  $('tableSearch').oninput = e => { searchText=e.target.value.toLowerCase(); render(); };
+  $('btnReset').onclick = () => {
+    activeReps=new Set(REPS); activeStatuses=new Set(['on-track','watch','at-risk','closed']);
+    activeStages=new Set(['ramping','ramped']); minGP=0; searchText='';
+    $('gpSlider').value=0; $('gpSliderVal').textContent='$0'; $('tableSearch').value='';
+    document.querySelectorAll('#repFilter .chip').forEach(c=>c.classList.add('active'));
+    document.querySelectorAll('#statusFilter .chip').forEach(c=>c.classList.add('active'));
+    document.querySelectorAll('#stageFilter .chip').forEach(c=>c.classList.add('active'));
+    render();
+  };
+  document.querySelectorAll('#pipelineTable th[data-col]').forEach(th => {
+    th.onclick = () => {
+      const col = th.dataset.col;
+      if (sortCol===col) sortDir*=-1; else {sortCol=col;sortDir=1;}
+      document.querySelectorAll('#pipelineTable th').forEach(t=>t.classList.remove('sorted'));
+      th.classList.add('sorted');
+      th.querySelector('.sort-icon').textContent = sortDir>0?'↑':'↓';
+      renderTable(filteredAccounts());
+    };
+  });
+  $('pacingRange').onchange = () => renderPacing();
+  $('pacingSort').onchange = () => renderPacing();
+}
+
+function filteredAccounts() {
+  return RAW.accounts.filter(a => {
+    if (!activeReps.has(a.o)) return false;
+    const st = statusOf(a);
+    if (!activeStatuses.has(st)) return false;
+    const sg = stageName(a);
+    if (!activeStages.has(sg)) return false;
+    if (a.e < minGP) return false;
+    if (searchText && !a.a.toLowerCase().includes(searchText) && !a.o.toLowerCase().includes(searchText)) return false;
+    return true;
+  });
+}
+
+// ======== RENDER ========
+function render() {
+  const accounts = filteredAccounts();
+  renderKPIs(accounts);
+  renderTable(accounts);
+  renderTrend();
+  renderScorecards();
+  renderForecast();
+}
+
+// ======== KPIs ========
+function renderKPIs(accounts) {
+  const totalEst = accounts.reduce((s,a)=>s+a.e,0);
+  const totalActual = accounts.reduce((s,a)=>s+a.t,0);
+  const teamRR = accounts.reduce((s,a)=>s+runRate(a),0);
+  const attain = totalEst>0?(teamRR/totalEst*100):0;
+  $('kpiEstGP').textContent = fmt$(totalEst);
+  $('kpiActualGP').textContent = fmt$(totalActual);
+  $('kpiRunRate').textContent = fmt$(teamRR);
+  const attEl = $('kpiAttain');
+  attEl.textContent = fmtPct(attain);
+  attEl.className = 'value '+(attain>=80?'text-green':attain>=50?'text-yellow':'text-red');
+  const counts={on_track:0,watch:0,at_risk:0,closed:0};
+  accounts.forEach(a=>{
+    const s=statusOf(a);
+    if(s==='on-track')counts.on_track++;
+    else if(s==='watch')counts.watch++;
+    else if(s==='at-risk')counts.at_risk++;
+    else counts.closed++;
+  });
+  $('kpiStatusCounts').innerHTML=`
+    <span class="status-dot"><span class="dot green"></span>${counts.on_track} On Track</span>
+    <span class="status-dot"><span class="dot yellow"></span>${counts.watch} Watch</span>
+    <span class="status-dot"><span class="dot red"></span>${counts.at_risk} At Risk</span>
+    <span class="status-dot"><span class="dot gray"></span>${counts.closed} Closed</span>`;
+  $('kpiTotalAccts').textContent = `${accounts.length} accounts shown`;
+  $('kpiActualGP').parentElement.className = 'kpi '+(attain>=80?'green':'');
+  $('kpiRunRate').parentElement.className = 'kpi '+(attain>=80?'green':attain>=50?'yellow':'red');
+}
+
+// ======== TABLE ========
+let expandedRow=null, miniCharts={};
+
+function sortAccounts(accounts) {
+  return [...accounts].sort((a,b)=>{
+    let va,vb;
+    if(sortCol==='a'){va=a.a;vb=b.a;}
+    else if(sortCol==='o'){va=a.o;vb=b.o;}
+    else if(sortCol==='c'){va=a.c||'';vb=b.c||'';}
+    else if(sortCol==='r'){va=a.r||'';vb=b.r||'';}
+    else if(sortCol==='e'){va=a.e;vb=b.e;}
+    else if(sortCol==='t'){va=a.t;vb=b.t;}
+    else if(sortCol==='rr'){va=runRate(a);vb=runRate(b);}
+    else if(sortCol==='att'){va=a.e>0?runRate(a)/a.e:0;vb=b.e>0?runRate(b)/b.e:0;}
+    else if(sortCol==='st'){va=statusOf(a);vb=statusOf(b);}
+    else{va=a.a;vb=b.a;}
+    if(typeof va==='string') return sortDir*va.localeCompare(vb);
+    return sortDir*(va-vb);
+  });
+}
+
+function renderTable(accounts) {
+  const sorted = sortAccounts(accounts);
+  const tbody = $('pipelineTbody');
+  Object.values(miniCharts).forEach(c=>c.destroy()); miniCharts={};
+  tbody.innerHTML='';
+  sorted.forEach((acct,i)=>{
+    const rr=runRate(acct);
+    const att=acct.e>0?(rr/acct.e*100):null;
+    const expandId='expand-'+i, chartId='mchart-'+i;
+    const barColor=att==null?'var(--gray)':att>=80?'var(--green)':att>=50?'var(--yellow)':'var(--red)';
+    const attHTML=att!=null?`<span style="color:${barColor}">${Math.round(att)}%</span>`:'—';
+    const tr=document.createElement('tr');
+    tr.className='data-row';
+    tr.innerHTML=`
+      <td><strong>${acct.a}</strong></td>
+      <td class="text-gray">${acct.o.split(' ')[0]}</td>
+      <td class="text-gray">${acct.c?acct.c.substring(0,7):'—'}</td>
+      <td class="text-gray">${acct.r?acct.r.substring(0,7):'—'}</td>
+      <td class="text-right">${fmt$(acct.e)}</td>
+      <td class="text-right">${fmt$(acct.t)}</td>
+      <td class="text-right">${fmt$(rr)}</td>
+      <td class="text-right">${attHTML}</td>
+      <td>${badgeHTML(acct)}</td>`;
+    tr.onclick=()=>toggleExpand(i,acct,expandId,chartId,tr);
+    tbody.appendChild(tr);
+    const expTr=document.createElement('tr');
+    expTr.className='expand-row';
+    expTr.innerHTML=`<td colspan="9"><div class="expand-inner" id="${expandId}"></div></td>`;
+    tbody.appendChild(expTr);
+  });
+  $('tableFooter').textContent=`Showing ${sorted.length} of ${RAW.accounts.length} accounts`;
+}
+
+function toggleExpand(i,acct,expandId,chartId,headerRow) {
+  const inner=$(expandId);
+  const isOpen=inner.classList.contains('open');
+  document.querySelectorAll('.expand-inner.open').forEach(el=>el.classList.remove('open'));
+  document.querySelectorAll('.data-row.expanded').forEach(el=>el.classList.remove('expanded'));
+  if(!isOpen){inner.classList.add('open');headerRow.classList.add('expanded');renderMiniChart(acct,inner,chartId);}
+}
+
+function renderMiniChart(acct,container,chartId) {
+  if(miniCharts[chartId]){miniCharts[chartId].destroy();}
+  const months=Object.keys(acct.g).sort();
+  const values=months.map(m=>acct.g[m]);
+  const rr=runRate(acct);
+  const stage=isRamping(acct)?'🆕 Ramping':'✅ Fully Ramped';
+  container.innerHTML=`
+    <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:10px">
+      <div><span style="color:var(--text2);font-size:10px;text-transform:uppercase">Rep</span><br><strong>${acct.o}</strong></div>
+      <div><span style="color:var(--text2);font-size:10px;text-transform:uppercase">Total GP</span><br><strong>${fmt$(acct.t)}</strong></div>
+      <div><span style="color:var(--text2);font-size:10px;text-transform:uppercase">Run Rate</span><br><strong>${fmt$(rr)}/mo</strong></div>
+      <div><span style="color:var(--text2);font-size:10px;text-transform:uppercase">Est. Monthly GP</span><br><strong>${fmt$(acct.e)}</strong></div>
+      <div><span style="color:var(--text2);font-size:10px;text-transform:uppercase">Stage</span><br><strong>${stage}</strong></div>
+      <div><span style="color:var(--text2);font-size:10px;text-transform:uppercase">AP/AR</span><br><strong>${acct.ap||'—'} / ${acct.ar||'—'}</strong></div>
+    </div>
+    <div class="expand-chart-wrap"><canvas id="${chartId}"></canvas></div>`;
+  if(months.length===0){container.innerHTML+='<div style="color:var(--text3);font-size:11px">No monthly GP data.</div>';return;}
+  const ctx=document.getElementById(chartId).getContext('2d');
+  const colors=values.map(v=>v<0?'rgba(248,81,73,0.7)':'rgba(56,139,253,0.7)');
+  miniCharts[chartId]=new Chart(ctx,{
+    type:'bar',data:{
+      labels:months.map(m=>{const[y,mo]=m.split('-');return['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+mo-1]+' '+y.substring(2);}),
+      datasets:[
+        {label:'Monthly GP',data:values,backgroundColor:colors,borderRadius:3},
+        {label:'$300 Threshold',data:new Array(months.length).fill(300),type:'line',borderColor:'rgba(210,153,34,0.6)',borderDash:[4,3],borderWidth:1.5,pointRadius:0,fill:false}
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'$'+c.raw.toFixed(2)}}},
+      scales:{x:{ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#30363d'}},y:{ticks:{color:'#8b949e',font:{size:10},callback:v=>'$'+v},grid:{color:'#30363d'}}}
+    }
+  });
+}
+
+// ======== TREND CHART ========
+let trendChart=null, activeTrendRep='ALL';
+
+function buildTrendData(rep) {
+  const repAccts=rep==='ALL'?RAW.accounts:RAW.accounts.filter(a=>a.o===rep);
+  return MONTHS.map(m=>repAccts.reduce((s,a)=>s+(a.g[m]||0),0));
+}
+
+function renderTrend() {
+  const toggleWrap=$('trendToggles');
+  if(!toggleWrap.hasChildNodes()){
+    const allBtn=document.createElement('span');
+    allBtn.className='chip active';allBtn.textContent='All Reps';allBtn.dataset.rep='ALL';
+    allBtn.onclick=()=>setTrendRep('ALL');toggleWrap.appendChild(allBtn);
+    REPS.forEach(rep=>{
+      const btn=document.createElement('span');
+      btn.className='chip';btn.textContent=rep.split(' ')[0];btn.title=rep;btn.dataset.rep=rep;
+      btn.onclick=()=>setTrendRep(rep);toggleWrap.appendChild(btn);
+    });
+  }
+  const values=buildTrendData(activeTrendRep);
+  const maxVal=Math.max(...values);
+  const barColors=MONTHS.map(m=>Q2_MONTHS.includes(m)?'rgba(56,139,253,0.85)':'rgba(56,139,253,0.35)');
+  const borderColors=MONTHS.map((m,i)=>{
+    if(i===0)return'transparent';
+    const delta=values[i]-values[i-1];
+    if(delta>maxVal*0.15)return'rgba(63,185,80,1)';
+    if(delta<-maxVal*0.15)return'rgba(248,81,73,1)';
+    return'transparent';
+  });
+  const repAccts=activeTrendRep==='ALL'?RAW.accounts:RAW.accounts.filter(a=>a.o===activeTrendRep);
+  const targetLine=MONTHS.map(()=>repAccts.reduce((s,a)=>s+a.e,0));
+  const ctx=$('trendChart').getContext('2d');
+  if(trendChart)trendChart.destroy();
+  trendChart=new Chart(ctx,{
+    type:'bar',data:{labels:MONTH_LABELS,datasets:[
+      {label:'GP Generated',data:values,backgroundColor:barColors,borderColor:borderColors,borderWidth:2,borderRadius:3,order:2},
+      {label:'Est. Monthly Target',data:targetLine,type:'line',borderColor:'rgba(163,113,247,0.7)',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false,order:1},
+      {label:'$300/acct Threshold',data:MONTHS.map(()=>300*repAccts.length),type:'line',borderColor:'rgba(210,153,34,0.5)',borderDash:[3,3],borderWidth:1.5,pointRadius:0,fill:false,order:1}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#8b949e',font:{size:11},boxWidth:12}},
+        tooltip:{callbacks:{label:c=>' '+c.dataset.label+': $'+Math.round(c.raw).toLocaleString(),
+          afterBody:items=>{const idx=items[0].dataIndex;if(idx>0){const d=values[idx]-values[idx-1];const p=values[idx-1]>0?(d/values[idx-1]*100).toFixed(1):'—';return['MoM: '+(d>=0?'+':'')+fmt$(d)+' ('+p+'%)'];}return[];}
+        }}},
+      scales:{x:{ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#21262d'}},y:{ticks:{color:'#8b949e',font:{size:10},callback:v=>'$'+v.toLocaleString()},grid:{color:'#21262d'}}}
+    }
+  });
+}
+
+function setTrendRep(rep) {
+  activeTrendRep=rep;
+  document.querySelectorAll('#trendToggles .chip').forEach(c=>c.classList.toggle('active',c.dataset.rep===rep));
+  renderTrend();
+}
+
+// ======== SCORECARDS ========
+let scMiniCharts={};
+function renderScorecards() {
+  Object.values(scMiniCharts).forEach(c=>c.destroy()); scMiniCharts={};
+  const grid=$('scorecardGrid'); grid.innerHTML='';
+  REPS.forEach(rep=>{
+    const repAccts=RAW.accounts.filter(a=>a.o===rep);
+    const totalEst=repAccts.reduce((s,a)=>s+a.e,0);
+    const totalActual=repAccts.reduce((s,a)=>s+a.t,0);
+    const teamRR=repAccts.reduce((s,a)=>s+runRate(a),0);
+    const attain=totalEst>0?Math.round(teamRR/totalEst*100):0;
+    const counts={on_track:0,watch:0,at_risk:0,closed:0};
+    let gapToGoal=0;
+    repAccts.forEach(a=>{
+      const s=statusOf(a);
+      if(s==='on-track')counts.on_track++;
+      else if(s==='watch')counts.watch++;
+      else if(s==='at-risk'){counts.at_risk++;gapToGoal+=Math.max(0,a.e-runRate(a));}
+      else counts.closed++;
+    });
+    const attColor=attain>=80?'var(--green)':attain>=50?'var(--yellow)':'var(--red)';
+    const chartId='sc-'+rep.replace(/\s+/g,'');
+    const rampingCount=repAccts.filter(a=>isRamping(a)).length;
+    const card=document.createElement('div');
+    card.className='scorecard';
+    card.innerHTML=`
+      <div class="rep-name">${rep}</div>
+      <div class="sc-stats">
+        <div class="sc-stat"><div class="lbl">Accounts</div><div class="val">${repAccts.length} <span style="font-size:11px;color:var(--blue);font-weight:400">(${rampingCount} ramping)</span></div></div>
+        <div class="sc-stat"><div class="lbl">Run Rate Attainment</div><div class="val" style="color:${attColor}">${attain}%</div></div>
+        <div class="sc-stat"><div class="lbl">Actual Total GP</div><div class="val">${fmt$(totalActual)}</div></div>
+        <div class="sc-stat"><div class="lbl">Est. Monthly Target</div><div class="val">${fmt$(totalEst)}</div></div>
+      </div>
+      <div class="attainment-bar"><div class="attainment-fill" style="width:${Math.min(100,attain)}%;background:${attColor}"></div></div>
+      <div style="margin-top:10px;font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Accounts by Status</div>
+      <div class="mini-chart-wrap"><canvas id="${chartId}"></canvas></div>
+      ${gapToGoal>0?`<div class="gap-to-goal">Gap to goal (At Risk): ${fmt$(gapToGoal)}/mo</div>`:''}`;
+    grid.appendChild(card);
+    setTimeout(()=>{
+      const ctx=document.getElementById(chartId);
+      if(!ctx)return;
+      scMiniCharts[chartId]=new Chart(ctx.getContext('2d'),{
+        type:'bar',data:{labels:['On Track','Watch','At Risk','Closed'],
+          datasets:[{data:[counts.on_track,counts.watch,counts.at_risk,counts.closed],
+            backgroundColor:['rgba(63,185,80,0.7)','rgba(210,153,34,0.7)','rgba(248,81,73,0.7)','rgba(110,118,129,0.5)'],borderRadius:3}]},
+        options:{responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw+' accounts'}}},
+          scales:{x:{ticks:{color:'#8b949e',font:{size:9}},grid:{display:false}},y:{ticks:{color:'#8b949e',font:{size:9}},grid:{color:'#21262d'}}}}
+      });
+    },0);
+  });
+}
+
+// ======== FORECAST GAP ========
+let q2Chart=null;
+function renderForecast() {
+  const gapDiv=$('gapByRep');
+  const repGaps=REPS.map(rep=>{
+    const repAccts=RAW.accounts.filter(a=>a.o===rep);
+    const totalEst=repAccts.reduce((s,a)=>s+a.e,0);
+    const teamRR=repAccts.reduce((s,a)=>s+runRate(a),0);
+    return{rep,gap:Math.max(0,totalEst-teamRR),totalEst,teamRR};
+  }).sort((a,b)=>b.gap-a.gap);
+  const maxGap=Math.max(...repGaps.map(r=>r.gap),1);
+  gapDiv.innerHTML=repGaps.map(r=>{
+    const pct=(r.gap/maxGap*100).toFixed(0);
+    const attain=r.totalEst>0?Math.round(r.teamRR/r.totalEst*100):0;
+    const attColor=attain>=80?'var(--green)':attain>=50?'var(--yellow)':'var(--red)';
+    return`<div class="gap-row"><span class="rep">${r.rep.split(' ')[0]}</span><div class="bar-wrap"><div class="bar-fill" style="width:${pct}%"></div></div><div style="text-align:right"><div class="gap-val">${r.gap>0?'-'+fmt$(r.gap)+'/mo':'✓ On Target'}</div><div style="font-size:10px;color:${attColor}">${attain}% attainment</div></div></div>`;
+  }).join('');
+
+  const declineDiv=$('declineFlags');
+  const declines=RAW.accounts.filter(a=>{
+    const may=a.g[PREV_MONTH]||0, jun=a.g[CURRENT_MONTH]||0;
+    return may>50&&jun<may*0.7;
+  }).sort((a,b)=>{
+    const dA=(a.g[PREV_MONTH]||0)-(a.g[CURRENT_MONTH]||0);
+    const dB=(b.g[PREV_MONTH]||0)-(b.g[CURRENT_MONTH]||0);
+    return dB-dA;
+  }).slice(0,10);
+  if(declines.length===0){declineDiv.innerHTML='<div class="empty-msg">No significant MoM declines.</div>';}
+  else{declineDiv.innerHTML=declines.map(a=>{
+    const may=a.g[PREV_MONTH]||0, jun=a.g[CURRENT_MONTH]||0;
+    const drop=may-jun, pct=may>0?Math.round(drop/may*100):0;
+    return`<div class="flag-item red"><div class="flag-acct">${a.a} <span style="float:right;color:var(--red)">-$${Math.round(drop)} (${pct}%)</span></div><div class="flag-sub">${a.o.split(' ')[0]} · May: ${fmt$(may)} → Jun: ${fmt$(jun)} <span style="color:var(--text3)">(Jun partial)</span></div></div>`;
+  }).join('');}
+
+  const atRiskDiv=$('atRiskClosing');
+  const today=new Date('2026-06-15');
+  const atRisk=RAW.accounts.filter(a=>{
+    if(statusOf(a)!=='at-risk')return false;
+    if(!a.c)return false;
+    return Math.round((new Date(a.c)-today)/86400000)<=90;
+  }).sort((a,b)=>new Date(a.c)-new Date(b.c)).slice(0,10);
+  if(atRisk.length===0){atRiskDiv.innerHTML='<div class="empty-msg">No at-risk accounts with close dates in 90 days.</div>';}
+  else{atRiskDiv.innerHTML=atRisk.map(a=>{
+    const daysLeft=Math.round((new Date(a.c)-today)/86400000);
+    const rr=runRate(a), urgency=daysLeft<=30?'red':'';
+    return`<div class="flag-item ${urgency}"><div class="flag-acct">${a.a} <span style="float:right;color:${daysLeft<=30?'var(--red)':'var(--yellow)'}">${daysLeft}d left</span></div><div class="flag-sub">${a.o.split(' ')[0]} · Run rate: ${fmt$(rr)}/mo · Target: ${fmt$(a.e)}/mo · Close: ${a.c?a.c.substring(0,7):'—'}</div></div>`;
+  }).join('');}
+
+  const q2Labels=['Apr 2026','May 2026','Jun 2026 (partial)'];
+  const q2Actuals=Q2_MONTHS.map(m=>RAW.accounts.reduce((s,a)=>s+(a.g[m]||0),0));
+  const q2Target=Q2_MONTHS.map(()=>RAW.accounts.reduce((s,a)=>s+a.e,0));
+  if(q2Chart)q2Chart.destroy();
+  q2Chart=new Chart($('q2Chart').getContext('2d'),{
+    type:'bar',data:{labels:q2Labels,datasets:[
+      {label:'Actual GP',data:q2Actuals,backgroundColor:'rgba(56,139,253,0.7)',borderRadius:3,order:2},
+      {label:'Monthly Target',data:q2Target,type:'line',borderColor:'rgba(163,113,247,0.8)',borderDash:[4,3],borderWidth:2,pointRadius:0,fill:false,order:1}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#8b949e',font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>' '+c.dataset.label+': $'+Math.round(c.raw).toLocaleString()}}},
+      scales:{x:{ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#21262d'}},y:{ticks:{color:'#8b949e',font:{size:10},callback:v=>'$'+v.toLocaleString()},grid:{color:'#21262d'}}}
+    }
+  });
+}
+
+// ======== ACCOUNT PACING HEATMAP ========
+function renderPacing() {
+  const numMonths = parseInt($('pacingRange').value);
+  const sortMode = $('pacingSort').value;
+  const displayMonths = MONTHS.slice(-numMonths);
+  const displayLabels = displayMonths.map(m=>{
+    const[y,mo]=m.split('-');
+    return['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+mo-1]+"'"+y.substring(2);
+  });
+  const lastMonth = displayMonths[displayMonths.length-1];
+
+  let accounts = [...RAW.accounts];
+  if(sortMode==='last') accounts.sort((a,b)=>(b.g[lastMonth]||0)-(a.g[lastMonth]||0));
+  else if(sortMode==='total') accounts.sort((a,b)=>b.t-a.t);
+  else accounts.sort((a,b)=>a.a.localeCompare(b.a));
+
+  $('pacingCount').textContent = `${accounts.length} accounts · ${displayMonths.length} months shown`;
+
+  // Trend: compare last 3 months
+  function getTrend(acct) {
+    const recent = displayMonths.slice(-3).map(m=>acct.g[m]||0);
+    if(recent.length < 2) return 'flat';
+    const first = recent.slice(0,-1).reduce((s,v)=>s+v,0)/(recent.length-1);
+    const last = recent[recent.length-1];
+    if(last > first*1.1) return 'up';
+    if(last < first*0.9) return 'down';
+    return 'flat';
+  }
+
+  const table = $('pacingTable');
+  let html = '<thead><tr>';
+  html += '<th class="acct-col" style="min-width:180px">Account</th>';
+  html += '<th style="min-width:90px">Rep</th>';
+  displayLabels.forEach(l=>{html+=`<th>${l}</th>`;});
+  html += '<th>Trend</th>';
+  html += '</tr></thead><tbody>';
+
+  accounts.forEach(acct=>{
+    const trend = getTrend(acct);
+    const trendIcon = trend==='up'?'↑':trend==='down'?'↓':'→';
+    const trendClass = trend==='up'?'trend-up':trend==='down'?'trend-down':'trend-flat';
+    html+=`<tr>`;
+    html+=`<td class="acct-name" title="${acct.a}">${acct.a}</td>`;
+    html+=`<td class="rep-name">${acct.o.split(' ')[0]}</td>`;
+    displayMonths.forEach(m=>{
+      const gp = acct.g[m];
+      if(gp==null){html+=`<td class="cell-empty">—</td>`;return;}
+      let cls='cell-red';
+      if(gp>=acct.e&&acct.e>0)cls='cell-green';
+      else if(gp>=300)cls='cell-yellow';
+      else if(gp<0)cls='cell-red';
+      html+=`<td class="${cls}">$${Math.round(gp).toLocaleString()}</td>`;
+    });
+    html+=`<td class="${trendClass}" style="font-size:16px;font-weight:700;text-align:center">${trendIcon}</td>`;
+    html+='</tr>';
+  });
+  html+='</tbody>';
+  table.innerHTML=html;
+}
+
+// ======== GAP ANALYSIS ========
+function renderGapAnalysis() {
+  const sel = $('gapMonthSel');
+  renderGapRankTable(sel.value);
+}
+
+function renderGapRankTable(month) {
+  const accounts = RAW.accounts.map(a=>({
+    ...a,
+    monthGP: a.g[month]||0,
+    gap: Math.max(0, a.e-(a.g[month]||0)),
+    gapPct: a.e>0 ? Math.max(0,(a.e-(a.g[month]||0))/a.e*100) : 0
+  })).filter(a=>a.e>0).sort((a,b)=>b.gap-a.gap);
+
+  const tbody = $('gapRankBody');
+  tbody.innerHTML = accounts.map((a,i)=>{
+    const isTop5 = i<5;
+    const rank = isTop5 ? `<span class="priority-badge">${i+1}</span>` : `<span style="color:var(--text3);font-size:11px">${i+1}</span>`;
+    const stageLbl = isRamping(a)?'<span class="stage-badge ramping" style="font-size:9px">🆕 Ramping</span>':'<span class="stage-badge ramped" style="font-size:9px">✅ Ramped</span>';
+    const gapColor = a.gap > a.e*0.5 ? 'var(--red)' : a.gap > a.e*0.25 ? 'var(--yellow)' : 'var(--text)';
+    return `<tr class="${isTop5?'top5':''}">
+      <td>${rank}</td>
+      <td><strong>${a.a}</strong></td>
+      <td style="color:var(--text2)">${a.o.split(' ')[0]}</td>
+      <td>${stageLbl}</td>
+      <td class="text-right">${fmt$(a.e)}</td>
+      <td class="text-right">${fmt$(a.monthGP)}</td>
+      <td class="text-right" style="color:${gapColor};font-weight:600">-${fmt$(a.gap)}</td>
+      <td class="text-right" style="color:${gapColor}">${Math.round(a.gapPct)}%</td>
+    </tr>`;
+  }).join('');
+
+  // Rep rollup
+  const repRollup = $('repRollup');
+  const byRep = {};
+  accounts.forEach(a=>{
+    if(!byRep[a.o]) byRep[a.o]={gap:0,count:0,accounts:[]};
+    byRep[a.o].gap+=a.gap;
+    byRep[a.o].count++;
+    byRep[a.o].accounts.push(a);
+  });
+  const repsSorted = Object.entries(byRep).sort((a,b)=>b[1].gap-a[1].gap);
+  repRollup.innerHTML = repsSorted.map(([rep,d])=>`
+    <div class="rep-rollup-card">
+      <div class="rep-nm">${rep.split(' ')[0]} ${rep.split(' ')[1]||''}</div>
+      <div class="rep-gap">-${fmt$(d.gap)}</div>
+      <div class="rep-sub">Gap across ${d.count} accounts with Est. GP</div>
+    </div>`).join('');
+}
+
+// ======== GP SPLIT ========
+let gpSplitChart=null;
+function renderGPSplit() {
+  // Build stacked data by month
+  const rampedByMonth=[], rampingByMonth=[];
+  MONTHS.forEach(m=>{
+    let retained=0, ramping=0;
+    RAW.accounts.forEach(a=>{
+      const gp=a.g[m]||0;
+      if(isRamping(a)) ramping+=gp;
+      else retained+=gp;
+    });
+    rampedByMonth.push(Math.max(0,retained));
+    rampingByMonth.push(Math.max(0,ramping));
+  });
+
+  // Rolling averages
+  const retentionPcts=MONTHS.map((_,i)=>{
+    const tot=rampedByMonth[i]+rampingByMonth[i];
+    return tot>0?(rampedByMonth[i]/tot*100):0;
+  }).filter(p=>p>0);
+  const avgRetention=retentionPcts.length>0?retentionPcts.reduce((s,v)=>s+v,0)/retentionPcts.length:0;
+  $('retentionPct').textContent=Math.round(avgRetention)+'%';
+  $('rampingPct').textContent=Math.round(100-avgRetention)+'%';
+
+  const ctx=$('gpSplitChart').getContext('2d');
+  if(gpSplitChart)gpSplitChart.destroy();
+  gpSplitChart=new Chart(ctx,{
+    type:'bar',data:{labels:MONTH_LABELS,datasets:[
+      {label:'Fully Ramped (Retained)',data:rampedByMonth,backgroundColor:'rgba(163,113,247,0.75)',borderRadius:3,stack:'gp'},
+      {label:'Ramping (New)',data:rampingByMonth,backgroundColor:'rgba(57,197,207,0.75)',borderRadius:3,stack:'gp'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#8b949e',font:{size:11},boxWidth:12}},
+        tooltip:{callbacks:{
+          afterDatasetsDraw:()=>{},
+          footer:items=>{
+            const idx=items[0].dataIndex;
+            const tot=rampedByMonth[idx]+rampingByMonth[idx];
+            if(tot<=0)return[];
+            const retPct=Math.round(rampedByMonth[idx]/tot*100);
+            const newPct=100-retPct;
+            return[`Split: ${retPct}% Retained / ${newPct}% New`];
+          }
+        }}},
+      scales:{x:{ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#21262d'},stacked:true},
+        y:{ticks:{color:'#8b949e',font:{size:10},callback:v=>'$'+v.toLocaleString()},grid:{color:'#21262d'},stacked:true}}
+    }
+  });
+
+  const splitSel=$('splitMonthSel');
+  renderSplitMonthBreakdown(splitSel.value);
+}
+
+function renderSplitMonthBreakdown(month) {
+  const rampedAccts=RAW.accounts.filter(a=>!isRamping(a)&&(a.g[month]||0)>0).sort((a,b)=>(b.g[month]||0)-(a.g[month]||0));
+  const rampingAccts=RAW.accounts.filter(a=>isRamping(a)&&(a.g[month]||0)>0).sort((a,b)=>(b.g[month]||0)-(a.g[month]||0));
+  const rampedTotal=rampedAccts.reduce((s,a)=>s+(a.g[month]||0),0);
+  const rampingTotal=rampingAccts.reduce((s,a)=>s+(a.g[month]||0),0);
+  const total=rampedTotal+rampingTotal;
+
+  function listHTML(accts,totalGP){
+    if(accts.length===0)return'<div style="color:var(--text3);font-size:11px;padding:10px 0">No GP this month</div>';
+    return accts.slice(0,15).map(a=>{
+      const gp=a.g[month]||0;
+      const barW=totalGP>0?Math.min(100,gp/totalGP*100):0;
+      return`<div class="mb-row">
+        <span style="min-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px" title="${a.a}">${a.a}</span>
+        <div class="mb-bar" style="height:6px;background:var(--surface);border-radius:3px"><div style="height:100%;width:${barW}%;background:var(--purple);border-radius:3px"></div></div>
+        <span style="color:var(--text2);font-size:11px;min-width:70px;text-align:right">${fmt$(gp)}</span>
+      </div>`;
+    }).join('')+(accts.length>15?`<div style="color:var(--text3);font-size:10px;margin-top:4px">+${accts.length-15} more</div>`:'');
+  }
+
+  $('rampedAcctList').innerHTML=listHTML(rampedAccts,rampedTotal);
+  $('rampingAcctList').innerHTML=listHTML(rampingAccts,rampingTotal);
+
+  const retPct=total>0?Math.round(rampedTotal/total*100):0;
+  const newPct=100-retPct;
+  $('splitMonthStats').innerHTML=`
+    <div class="stat-callout" style="flex:1;min-width:150px">
+      <div class="val" style="font-size:20px;color:var(--purple)">${fmt$(rampedTotal)}</div>
+      <div class="lbl">Retained GP (${retPct}%)</div>
+    </div>
+    <div class="stat-callout" style="flex:1;min-width:150px">
+      <div class="val" style="font-size:20px;color:var(--teal)">${fmt$(rampingTotal)}</div>
+      <div class="lbl">New GP (${newPct}%)</div>
+    </div>
+    <div class="stat-callout" style="flex:1;min-width:150px">
+      <div class="val" style="font-size:20px">${fmt$(total)}</div>
+      <div class="lbl">Total GP — ${MONTH_LABELS[MONTHS.indexOf(month)]||month}</div>
+    </div>`;
+}
+
+// ======== BOOT ========
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
